@@ -1,0 +1,415 @@
+# Mergero Company Intelligence, Content and Automated GTM Engine
+
+## Summary
+
+Build a continuously growing universe of companies in the Nordics, DACH, and Switzerland. Enrich those companies with contacts, financials, and evidence, then use the intelligence in two connected ways:
+
+1. Match and reach companies for buyer mandates or Mergero sourcing assignments.
+2. Create useful, company-focused content that builds trust and makes subsequent outreach warmer and more relevant.
+
+```text
+Continuous company acquisition
+             ↓
+Enriched Company Universe
+             ↓
+     Company Intelligence
+        ↙             ↘
+Content marketing     Mandate matching
+        ↘             ↙
+   Engagement and prioritization
+             ↓
+Automated regional outreach
+             ↓
+Owner conversations and intent
+             ↓
+Qualified opportunity for MGX
+```
+
+Content is a value-first activation layer, not a separate publishing platform. It gives business owners a reason to engage with Mergero before they are ready to discuss selling.
+
+## Product Model
+
+### 1. Continuously growing company universe
+
+Collect companies independently of buyer mandates:
+
+- Switzerland, Germany, Austria, Finland, Sweden, Norway, and Denmark.
+- Approximately 5–20 employees in the Nordics.
+- Approximately 20–40 employees in DACH.
+- Broad industry coverage.
+- Companies with known or unknown willingness to sell.
+
+For the hackathon:
+
+- Finland represents the Nordic email-first model.
+- Germany represents the DACH call-first model.
+- Load approximately 1,000 companies per country.
+
+### 2. Tiered company profiles
+
+- **Skeleton:** registration number, name, country, location, industry, employees, domain, source, and freshness.
+- **Enriched:** financials, owner or director, contact routes, company description, evidence, and othe data.
+- **Outreach-ready:** verified contact, relevant content, personalization facts, channel policy, suppression status, and match explanation.
+
+All companies receive skeleton profiles. Strong candidates receive progressive or just-in-time enrichment.
+
+### 3. Three activation modes
+
+- **Company explorer:** Mergero searches the universe directly and creates target lists.
+- **Buyer mandate:** Buyer criteria rank companies already in the universe.
+- **Mergero sourcing thesis:** Advisers search and activate a market without waiting for a named buyer mandate.
+
+A mandate improves ranking and prioritization; it does not initiate the original company discovery.
+
+## Content Intelligence Layer
+
+### Purpose
+
+Use Mergero’s understanding of markets and companies to provide value before asking an owner about a transaction.
+
+Content should:
+
+- Establish Mergero’s credibility.
+- Educate owners.
+- Create warmer reasons for outreach.
+- Generate engagement signals.
+- Nurture companies that are not currently ready to sell.
+- Support both inbound and outbound origination.
+
+### Content families
+
+Create three connected content families for target companies:
+
+1. **Market benchmark**
+   - Revenue, profitability, growth, or market-structure benchmarks.
+   - Comparisons by geography, sector, and company size.
+   - Based only on sufficiently aggregated or anonymized data.
+
+2. **Buyer-demand brief**
+   - What buyers are looking for.
+   - Sectors, company characteristics, and strategic themes receiving demand.
+   - Buyer identities and confidential mandates remain hidden unless disclosure is approved.
+
+3. **Exit-readiness guide**
+   - Educational checklist for financial, legal, operational, and management readiness.
+   - Helps owners assess preparedness without requiring an immediate selling decision.
+
+These are components of one content system, not three separate products.
+
+### Company-specific content selection
+
+For each outreach-ready company, the system recommends:
+
+- The most relevant content asset.
+- Why it is relevant.
+- A personalized introduction.
+- The best channel and timing.
+- A follow-up action if the owner engages.
+
+Example:
+
+> We recently prepared a benchmark for Finnish software-service businesses of a similar size. It highlights the factors buyers are currently prioritizing and may be useful for your planning.
+
+Avoid language that exposes sensitive profiling, such as directly referencing an owner’s estimated EBITDA or implying that Mergero knows they want to sell.
+
+### Content workflow
+
+```text
+Approved and aggregated company data
+             ↓
+Select content family and audience
+             ↓
+Generate insight outline and supporting evidence
+             ↓
+Human review and approval
+             ↓
+Create report, email copy and LinkedIn copy
+             ↓
+Distribute through campaigns
+             ↓
+Track views, clicks and responses
+             ↓
+Update engagement priority
+```
+
+For the hackathon, publishing remains simulated or sandboxed. The working product generates previews, landing-page content, emails, and LinkedIn drafts.
+
+### Engagement signals
+
+Record:
+
+- Email opened.
+- Link clicked.
+- Report viewed or downloaded.
+- Exit-readiness assessment started or completed.
+- LinkedIn interaction recorded manually.
+- Reply received.
+- Meeting requested.
+
+Content engagement increases outreach priority but must not automatically change willingness-to-sell status. Selling intent changes only through explicit owner interaction or an adviser-recorded outcome.
+
+## Core Implementation
+
+### Step 1: Platform foundation
+
+Build:
+
+- Next.js and TypeScript interface.
+- Python and FastAPI backend.
+- PostgreSQL.
+- Database-backed job processing.
+- Docker Compose.
+- CSV and fixture-data imports.
+
+Complete when companies can be imported and explored without a mandate.
+
+### Step 2: Continuous data acquisition
+
+Create connectors for:
+
+- Prepared CSV data.
+- Finnish PRH.
+- German registry or licensed provider data.
+- Permitted company website extraction.
+- Optional Vainu, Dealfront, or similar trial APIs.
+
+Resolve duplicate companies using:
+
+1. National registration number.
+2. Domain.
+3. Normalized name, country, and address.
+
+Preserve every original source record.
+
+### Step 3: Progressive enrichment
+
+Collect:
+
+- Employees.
+- Revenue.
+- EBITDA or operating profit.
+- Reporting period and currency.
+- Owner or managing director.
+- Email, phone, and LinkedIn URL.
+- Business description.
+- Contact, team, about, and German Impressum information.
+
+Each field records its source, retrieval date, confidence, verification status, and whether it is reported, inferred, or estimated.
+
+### Step 4: Company explorer
+
+Allow advisers to:
+
+- Search the full universe.
+- Filter by market, sector, employees, financials, ownership, intent, completeness, and freshness.
+- Inspect the evidence behind each field.
+- Save target lists.
+- Request deeper enrichment.
+- Create a mandate or sourcing thesis from a filtered list.
+
+### Step 5: Matching and prioritization
+
+Rank companies using:
+
+- Strategic fit.
+- Industry and geography.
+- Size and financial fit.
+- Contact availability.
+- Data quality and freshness.
+- Content engagement.
+- Previous outreach.
+- Explicit owner intent.
+
+Show the reasons for every ranking. Content engagement is one factor, not proof that the owner is interested in selling.
+
+### Step 6: Content generation
+
+Generate:
+
+- Market benchmark summary.
+- Buyer-demand brief.
+- Exit-readiness checklist.
+- Landing-page copy.
+- Email introduction.
+- Follow-up message.
+- LinkedIn post draft.
+- Company-specific content recommendation.
+
+The system must support:
+
+- Deterministic templates without an LLM.
+- Optional LLM-enhanced writing.
+- Evidence-constrained generation.
+- Human approval before content distribution.
+
+### Step 7: Outreach preparation
+
+For shortlisted companies, create:
+
+- Company brief.
+- Decision-maker summary.
+- Match explanation.
+- Recommended content asset.
+- Personalized email sequence.
+- German call brief.
+- Recommended next action.
+
+The first interaction may be value-led content outreach rather than a direct acquisition question.
+
+### Step 8: Automated regional execution
+
+After one campaign-level approval:
+
+**Finland and Nordics**
+
+- Send content-led emails automatically.
+- Schedule automatic follow-ups.
+- Escalate engaged owners to more direct outreach.
+- Create LinkedIn or call tasks when appropriate.
+
+**Germany and DACH**
+
+- Create prioritized call tasks.
+- Show the relevant content asset in the call brief.
+- Generate permitted follow-up emails.
+- Keep cold LinkedIn and WhatsApp actions manual.
+
+Across all regions:
+
+- Replies pause the sequence.
+- Bounces stop delivery.
+- Opt-outs enter global suppression.
+- Job retries cannot create duplicate messages.
+- Automation continues until a response, terminal status, or sequence completion.
+
+### Step 9: Reply and intent loop
+
+Classify outcomes as:
+
+- `unknown`
+- `content_engaged`
+- `not_interested`
+- `future_interest`
+- `open_to_discussion`
+- `actively_considering`
+- `wrong_contact`
+- `do_not_contact`
+
+On reply:
+
+- Stop scheduled follow-ups.
+- Classify the response.
+- Record the intent signal.
+- Draft a suggested answer.
+- Assign strategic conversations to an adviser.
+- Feed the result into future prioritization and content planning.
+
+AI assists with classification and drafting but does not autonomously conduct M&A conversations.
+
+### Step 10: MGX export and measurement
+
+Export:
+
+- Company and contact profile.
+- Financials.
+- Evidence and confidence.
+- Mandate-match reasoning.
+- Content engagement.
+- Outreach history.
+- Owner intent.
+- Recommended next action.
+
+Track:
+
+- Companies acquired.
+- Profile completeness.
+- Verified contacts.
+- Outreach-ready companies.
+- Content views and downloads.
+- Reply and meeting rates.
+- Qualified conversations.
+- Future and active interest.
+- Performance by country, content type, and channel.
+
+## Main Data Types
+
+- `Company`
+- `SourceRecord`
+- `Contact`
+- `FinancialPeriod`
+- `FieldEvidence`
+- `EnrichmentJob`
+- `Mandate`
+- `SourcingThesis`
+- `Match`
+- `SavedTargetList`
+- `ContentAsset`
+- `ContentEvidence`
+- `CompanyContentRecommendation`
+- `ContentEngagement`
+- `Campaign`
+- `Enrollment`
+- `OutreachMessage`
+- `Interaction`
+- `IntentObservation`
+- `CallTask`
+- `SuppressionEntry`
+
+## Team Division
+
+- **Data engineer:** acquisition, entity resolution, enrichment, provenance, and benchmark preparation.
+- **Backend engineer:** data model, jobs, matching, campaigns, engagement events, replies, and suppression.
+- **Frontend engineer:** universe explorer, profiles, content studio, campaigns, and adviser queue.
+- **GTM/demo owner:** content strategy, regional templates, campaign rules, QA, and presentation.
+
+With three people, content and GTM responsibilities are divided across the team.
+
+## Hackathon Demo
+
+1. Open a universe of 2,000 companies collected without a buyer mandate.
+2. Show financial, contact, source, and freshness coverage.
+3. Display an anonymized market benchmark.
+4. Show the related buyer-demand brief and exit-readiness guide.
+5. Select a company and show its recommended content asset.
+6. Create a buyer mandate.
+7. Match and rank companies immediately from the existing universe.
+8. Trigger deeper enrichment for shortlisted companies.
+9. Approve a content-led Finnish email campaign.
+10. Show the German call queue and relevant call content.
+11. Simulate an owner viewing a report.
+12. Show the resulting increase in engagement priority.
+13. Simulate an interested reply.
+14. Show automated follow-up cancellation and intent classification.
+15. Export the qualified opportunity for MGX.
+
+## Acceptance Criteria
+
+- 2,000 companies exist before creating a mandate.
+- At least 100 companies are deeply enriched.
+- At least 20 companies per country are outreach-ready.
+- Important facts show source, confidence, and freshness.
+- Content uses aggregated, anonymized, or approved information.
+- At least one market benchmark, buyer-demand brief, and exit-readiness guide are generated.
+- Every shortlisted company receives a relevant content recommendation.
+- Content engagement affects prioritization but does not falsely imply selling intent.
+- A Finland sandbox campaign executes automatically.
+- A Germany campaign creates call tasks.
+- Replies stop pending follow-ups.
+- Opt-outs suppress all future outreach.
+- The system works without an LLM.
+- Qualified opportunities export to CSV and JSON.
+- No real owner is contacted during the hackathon.
+
+## Assumptions and Guardrails
+
+- Content is created for business owners and target companies, not primarily for buyers.
+- Public content never exposes identifiable company financials, inferred intent, or confidential mandate data.
+- Company-specific personalization references safe public facts and aggregated benchmarks.
+- Human approval is required for each new content asset and campaign, not every individual message.
+- LinkedIn publishing can remain manual during the hackathon.
+- The content layer supports acquisition and outreach; it does not replace the core data engine.
+- Content engagement indicates interest in the topic, not necessarily willingness to sell.
+
+The updated pitch is:
+
+> Mergero continuously builds the company universe, turns its market intelligence into useful content for business owners, and uses the resulting engagement to create warmer, better-qualified M&A conversations.
