@@ -18,3 +18,9 @@ logs/
 docs/
 research/
 *.docx
+
+# Native builds and local browser test artifacts
+target/
+.playwright/
+test-results/
+playwright-report/
