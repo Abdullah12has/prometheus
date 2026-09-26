@@ -24,3 +24,6 @@ target/
 .playwright/
 test-results/
 playwright-report/
+
+.venv-speech/
+.playwright-mcp/

@@ -3,7 +3,8 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_ENV = ROOT_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -13,6 +14,12 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://permetheus@localhost:5433/permetheus"
     admin_password: SecretStr | None = None
+    session_secret: SecretStr | None = None
+    root_dir: Path = ROOT_DIR
+    asr_binary: Path = ROOT_DIR / "data/bin/native-asr-bridge"
+    asr_model_path: Path | None = None
+    tts_python: Path = ROOT_DIR / ".venv-speech/bin/python"
+    google_redirect_uri: str = "http://localhost:4311/oauth/google/callback"
     web_origins: str = "http://localhost:4310,http://127.0.0.1:4310"
 
     # Connector presence only; values are never returned by the API.
@@ -34,3 +41,7 @@ class Settings(BaseSettings):
     @property
     def cookie_secure(self) -> bool:
         return any(o.startswith("https://") for o in self.allowed_origins)
+
+    @property
+    def data_dir(self) -> Path:
+        return self.root_dir / "data"

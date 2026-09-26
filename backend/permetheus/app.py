@@ -8,6 +8,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from . import auth, companies, contacts, errors, provenance, workspace
 from .config import Settings
 from .db import init_db, make_engine, make_sessionmaker
+from .speech_runtime import SpeechRuntime
+from .llm import LanguageModel
 
 log = logging.getLogger("permetheus")
 
@@ -24,6 +26,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Boot anyway; /api/health reports the database as unavailable.
             log.error("database bootstrap failed: %s", exc)
         yield
+        await app.state.speech.close()
         engine.dispose()
 
     app = FastAPI(title="Permetheus API", version="0.1.0", lifespan=lifespan,
@@ -31,8 +34,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.sessionmaker = make_sessionmaker(engine)
     app.state.login_failures = {}
+    app.state.speech = SpeechRuntime(settings.root_dir, settings.asr_binary, settings.asr_model_path or settings.data_dir / "unconfigured.gguf", settings.tts_python)
+    app.state.llm = LanguageModel(settings.litellm_base_url, settings.litellm_api_key.get_secret_value() if settings.litellm_api_key else None, settings.litellm_model)
     app.add_middleware(CORSMiddleware, allow_origins=sorted(settings.allowed_origins), allow_credentials=True,
-                       allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-CSRF-Token"])
+                       allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-CSRF-Token"])
     errors.install(app)
     for module in (auth, workspace, companies, contacts, provenance):
         app.include_router(module.router)
