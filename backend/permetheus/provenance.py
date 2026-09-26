@@ -230,3 +230,34 @@ def add_intent(company_id: uuid.UUID, body: IntentIn, db: Session = Depends(get_
                     company_id, confirmed=body.confirmed)
     db.commit()
     return item
+
+
+class ReviewIn(BaseModel):
+    model_config = Strict
+    status: ReviewStatus
+    reason: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("status")
+    @classmethod
+    def final_decision(cls, value):
+        if value == ReviewStatus.proposed:
+            raise ValueError("Choose accepted or rejected")
+        return value
+
+
+@router.post("/evidence/{evidence_id}/review", response_model=EvidenceOut)
+def review_evidence(evidence_id: uuid.UUID, body: ReviewIn, db: Session = Depends(get_db)):
+    observation = get_or_404(db, Evidence, evidence_id)
+    observation.review_status = body.status
+    record_activity(db, "evidence.reviewed", "Evidence reviewed", observation.company_id, evidence_id=str(evidence_id), decision=body.status.value, reason=body.reason)
+    db.commit()
+    return observation
+
+
+@router.post("/financials/{financial_id}/review", response_model=FinancialOut)
+def review_financial(financial_id: uuid.UUID, body: ReviewIn, db: Session = Depends(get_db)):
+    observation = get_or_404(db, FinancialObservation, financial_id)
+    observation.review_status = body.status
+    record_activity(db, "financial.reviewed", "Financial observation reviewed", observation.company_id, financial_id=str(financial_id), decision=body.status.value, reason=body.reason)
+    db.commit()
+    return observation
