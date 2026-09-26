@@ -21,7 +21,7 @@ def stop(*_, exit_code=0):
 signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGTERM, stop)
 try:
-    processes.append(subprocess.Popen(['uv', 'run', 'uvicorn', 'permetheus.app:app', '--host', '127.0.0.1', '--port', '4311'], cwd=root))
+    processes.append(subprocess.Popen(['uv', 'run', 'uvicorn', 'permetheus.app:create_app', '--factory', '--host', '127.0.0.1', '--port', '4311'], cwd=root))
     processes.append(subprocess.Popen(['npm', 'run', 'dev', '--', '--host', '127.0.0.1'], cwd=root / 'web'))
     while all(process.poll() is None for process in processes):
         time.sleep(.5)
