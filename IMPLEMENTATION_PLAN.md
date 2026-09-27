@@ -73,3 +73,16 @@ All existing routes remain usable in the new style. Creating an agent with a val
 - German CSV fields were compared with live API records, including records where validation authority differs from registration authority. Resumed PRH/GLEIF archives are hash-checked before reading checkpointed rows. The German API prefix was replayed against the CSV without duplicate companies.
 - Real country imports and enrichment run locally. See `DATA_SOURCES.md` for coverage and the Companies discovery panel for current counts. A completed research job represents bounded source attempts; missing financials and selling interest remain unknown.
 - Git-visible files were checked against locally configured secret values and source-repository names. Credentials, source archives, recordings and database contents remain ignored. No live outreach was sent during verification.
+
+### Population completed
+
+At 06:45 UTC on 27 September 2026, all three imports completed without recorded source errors:
+
+| Country | Companies in the local database | Coverage |
+|---|---:|---|
+| Finland | 462,856 | 462,855 added from the PRH bulk snapshot, plus one existing company |
+| Switzerland | 794,207 | All 794,210 available Zefix records processed; duplicate UIDs merged |
+| Germany | 240,239 | Active German-address entities in the GLEIF snapshot; national-register coverage remains partial |
+| Total | 1,497,302 | Unique company records across the three countries |
+
+Background enrichment remains active for all three countries. At that checkpoint, 848 research runs had completed and 420 model-extracted facts had been stored in addition to the imported registry evidence. These counts will grow; they do not imply complete financial or contact coverage. The app remains available at `http://localhost:4310/`, and import/enrichment controls are under Companies → Discover and research companies.
