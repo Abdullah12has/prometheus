@@ -1,0 +1,101 @@
+.future-sim { --sim-ink: #202c40; --sim-blue: #3d58ad; --sim-line: #dce2eb; --sim-soft: #f5f7fb; display: grid; gap: 22px; max-width: 1120px; color: var(--sim-ink); }
+.future-sim h2 { font-size: 25px; margin: 8px 0; letter-spacing: -.7px; }
+.future-sim h3 { font-size: 22px; margin: 5px 0; }
+.future-sim h4 { margin: 25px 0 8px; font-size: 15px; }
+.future-sim p { line-height: 1.65; }
+.future-sim__intro { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 10px 0 4px; }
+.future-sim__intro h2 { font-size: clamp(27px, 3vw, 36px); font-weight: 650; letter-spacing: -1.2px; }
+.future-sim__intro p { max-width: 660px; margin: 12px 0 0; color: #647087; font-size: 14px; }
+.future-sim__intro-mark { display: grid; place-items: center; flex-shrink: 0; width: 74px; height: 74px; color: var(--sim-blue); background: #edf1fa; border-radius: 22px; transform: rotate(-7deg); }
+.future-sim__eyebrow { font-size: 11px; color: #63738c; font-weight: 600; }
+.future-sim__start { display: flex; align-items: center; gap: 20px; padding: 20px 22px; border: 1px solid var(--sim-line); border-radius: 12px; background: #fff; }
+.future-sim__start > div { flex: 1; min-width: 0; }
+.future-sim__start label { display: block; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+.future-sim__start > button { min-height: 44px; white-space: nowrap; background: var(--sim-blue); border-color: var(--sim-blue); box-shadow: 0 3px 8px #3d58ad20; }
+.future-sim__suggested { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.future-sim__suggested > span { font-size: 12px; color: #63738c; margin-right: 5px; }
+.future-sim__suggested button { padding: 7px 11px; border: 1px solid var(--sim-line); border-radius: 20px; background: #fff; font-size: 12px; cursor: pointer; }
+.future-sim__suggested small { margin-left: 8px; color: #63738c; }
+.future-sim button[aria-pressed=true] { background: #edf1fc; border-color: var(--sim-blue); color: #253d82; }
+.future-sim :is(button, a, summary):focus-visible { outline: 2px solid var(--sim-blue); outline-offset: 4px; }
+.future-sim__canvas { border: 1px solid var(--sim-line); border-radius: 14px; overflow: hidden; background: radial-gradient(#cfd7e3 .7px, transparent .7px) 0 0 / 14px 14px, #f6f8fc; }
+.future-sim__canvas > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 15px 22px; background: #ffffffdf; border-bottom: 1px solid var(--sim-line); font-size: 12px; }
+.future-sim__canvas > header > span { display: inline-flex; align-items: center; gap: 8px; }
+.future-sim__run-state { color: #607087; }
+.future-sim__run-state.is-complete { color: #287452; }
+.future-sim__flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px; list-style: none; padding: 34px 26px; margin: 0; }
+.future-sim__flow > li { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 20px; border: 1px solid #d5deeb; border-radius: 10px; background: #fff; box-shadow: 0 4px 12px #253e6510; min-width: 0; }
+.future-sim__flow > li:not(:last-child)::after { content: ''; position: absolute; top: 50%; left: 100%; width: 37px; height: 2px; background: repeating-linear-gradient(90deg, #91a4ca 0 5px, transparent 5px 9px); }
+.future-sim__flow > li:not(:first-child)::before { content: ''; position: absolute; z-index: 1; left: -4px; top: calc(50% - 3px); width: 7px; height: 7px; border: 1px solid #8b9fc8; border-radius: 50%; background: #fff; }
+.future-sim__node-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #edf1fb; color: var(--sim-blue); margin-bottom: 19px; }
+.future-sim__flow h3 { font-size: 16px; line-height: 1.4; margin: 8px 0 0; letter-spacing: -.25px; }
+.future-sim__flow p { font-size: 12px; color: #657189; margin: 9px 0 18px; }
+.future-sim__node-foot { font-size: 11px; color: #465e86; padding-top: 13px; border-top: 1px solid #e9edf4; width: 100%; margin-top: auto; }
+.future-sim__canvas > footer { display: flex; justify-content: space-between; gap: 20px; padding: 14px 22px; background: #ffffffd9; border-top: 1px solid var(--sim-line); font-size: 11px; line-height: 1.6; color: #63718a; }
+.future-sim__canvas > footer > :last-child { flex-shrink: 0; }
+.future-sim__elapsed { font-variant-numeric: tabular-nums; color: var(--sim-blue); }
+.is-running .future-sim__flow > li::after { animation: sim-flow 1.3s linear infinite; }
+.is-running .future-sim__run-state::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--sim-blue); animation: sim-pulse 1.6s ease-in-out infinite; }
+@keyframes sim-flow { to { background-position: 18px 0; } }
+@keyframes sim-pulse { 50% { opacity: .3; } }
+.future-sim__error { padding: 18px; background: #fff4ef; border: 1px solid #e7cbbf; border-radius: 10px; }
+.future-sim__results-header { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 12px; }
+.future-sim__results-header p { margin: 8px 0 0; color: #63718a; font-size: 13px; }
+.future-sim__notice { padding: 12px 16px; border-left: 3px solid #8ea6d7; background: #f1f4fb; margin: 0; font-size: 12px; color: #50617e; }
+.future-sim__results { display: grid; gap: 22px; }
+.future-sim__buyer { border: 1px solid var(--sim-line); border-radius: 14px; padding: 26px; background: #fff; }
+.future-sim__buyer > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid #e9edf4; }
+.future-sim__buyer-title { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.future-sim__lead-mark { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px; background: #edf1fb; color: var(--sim-blue); }
+.future-sim__buyer h3 a { color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.future-sim__buyer h3 a:hover { text-decoration: underline; }
+.future-sim__reason { font-size: 15px; margin-bottom: 4px; max-width: 85ch; }
+.future-sim details { margin-top: 8px; }
+.future-sim summary { cursor: pointer; padding: 12px 0; font-size: 13px; font-weight: 600; }
+.future-sim summary svg { vertical-align: middle; margin-right: 5px; }
+.future-sim__evidence > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.future-sim blockquote { margin: 0; padding: 16px; background: #f5f7fb; border: 1px solid #e5eaf3; border-radius: 8px; overflow-wrap: anywhere; }
+.future-sim blockquote span, .future-sim blockquote small { display: block; font-size: 11px; color: #63718a; }
+.future-sim blockquote p { font-size: 12px; margin: 8px 0; }
+.future-sim blockquote a { font-size: 12px; color: #3d58ad; }
+.future-sim__scenario-hint { font-size: 12px; color: #63718a; margin: 0 0 15px; }
+.future-sim__branches { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.future-sim__branches button { position: relative; display: grid; gap: 10px; text-align: left; padding: 17px; border: 1px solid var(--sim-line); border-radius: 9px; background: #fff; cursor: pointer; transition: background .15s, border-color .15s; }
+.future-sim__branches button:hover { border-color: #869cc6; }
+.future-sim__branches button[aria-pressed=true]::after { content: ''; position: absolute; right: 14px; top: 17px; width: 7px; height: 7px; border-radius: 50%; background: var(--sim-blue); }
+.future-sim__branches strong { font-size: 13px; }
+.future-sim__branches span { font-size: 11px; color: #63718a; }
+.future-sim__branch-detail { padding: 20px; margin-top: 12px; border: 1px solid #d6e0f3; background: #f5f7fd; border-radius: 9px; font-size: 13px; }
+.future-sim__branch-detail ul { padding-left: 19px; }
+.future-sim__branch-detail li { margin: 10px 0; color: #63718a; }
+.future-sim__branch-detail li span { display: inline-flex; align-items: center; gap: 6px; color: #354e7e; font-weight: 600; }
+.future-sim__branch-detail > p { display: flex; align-items: baseline; gap: 8px; border-top: 1px solid #dfe6f4; padding-top: 13px; margin-bottom: 0; }
+.future-sim__branch-detail > p svg { flex-shrink: 0; }
+.future-sim__tree ol { list-style: none; padding-left: 14px; }
+.future-sim__tree li { padding: 0 0 24px 24px; border-left: 2px solid #d5dff0; position: relative; }
+.future-sim__tree li::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #fff; border: 2px solid #8da2ca; position: absolute; left: -5.5px; top: 5px; }
+.future-sim__tree li > span { display: block; margin: 5px 0 12px; }
+.future-sim__tree li > div { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.future-sim__tree li p { font-size: 12px; padding: 13px; margin: 0; background: #f5f7fb; border-radius: 7px; }
+.future-sim__tree b { display: block; margin-bottom: 5px; color: #3d58ad; }
+.future-sim__history > div { display: grid; gap: 7px; }
+.future-sim__history button { display: flex; align-items: center; gap: 15px; text-align: left; padding: 15px; border: 1px solid var(--sim-line); background: #fff; border-radius: 8px; cursor: pointer; }
+.future-sim__history button span { margin-left: auto; font-size: 12px; color: #63718a; }
+.future-sim__empty { padding: 25px; border: 1px dashed #b8c6df; border-radius: 10px; }
+@media (max-width: 760px) {
+  .future-sim__intro-mark { display: none; }
+  .future-sim__start, .future-sim__results-header { flex-direction: column; align-items: stretch; }
+  .future-sim__flow { grid-template-columns: 1fr; gap: 24px; padding: 22px; }
+  .future-sim__flow > li { padding: 18px; }
+  .future-sim__flow > li:not(:last-child)::after { top: 100%; left: 50%; width: 2px; height: 25px; background: repeating-linear-gradient(0deg, #91a4ca 0 5px, transparent 5px 9px); }
+  .future-sim__flow > li:not(:first-child)::before { top: -4px; left: calc(50% - 3px); }
+  .is-running .future-sim__flow > li::after { animation: sim-flow-vertical 1.3s linear infinite; }
+  .future-sim__canvas > footer { flex-direction: column; gap: 5px; }
+  .future-sim__branches, .future-sim__evidence > div, .future-sim__tree li > div { grid-template-columns: 1fr; }
+  .future-sim__buyer { padding: 18px; }
+  .future-sim__buyer > header { flex-wrap: wrap; }
+  .future-sim__history button { flex-wrap: wrap; }
+  .future-sim__history button span { margin-left: 0; }
+}
+@keyframes sim-flow-vertical { to { background-position: 0 18px; } }
+@media (prefers-reduced-motion: reduce) { .future-sim *, .future-sim *::before, .future-sim *::after { animation: none !important; transition: none !important; } }

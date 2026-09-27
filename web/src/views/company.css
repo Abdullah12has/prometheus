@@ -1,0 +1,20 @@
+.company-detail { min-width: 0; }
+.company-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -8px; }
+.company-summary__status { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--radius-round); background: var(--bg-muted); color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+.company-summary > :last-child { margin-left: auto; }
+.company-panels { display: grid; gap: 16px; }
+.company-detail .panel details { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.company-detail .panel details > summary { padding: 4px 0; font-size: 14px; }
+.company-detail .panel details[open] > summary { margin-bottom: 12px; }
+.company-detail .record-list__item details { border-top: 0; padding-top: 4px; }
+.company-detail .record-list__item details > summary { font-size: 13px; color: var(--text-secondary); }
+.company-detail .record-list__item > a { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 13px; }
+.identity-form { border-top: 1px solid var(--border-subtle); margin-top: 4px; padding-top: 16px; display: grid; gap: 8px; max-width: 36rem; }
+.identity-form > label:not(.checkbox-label) { margin-top: 4px; font-size: 13px; font-weight: 500; }
+.identity-form textarea { min-height: 72px; }
+.identity-form .btn { justify-self: start; }
+.review-actions { display: flex; gap: 8px; margin-top: 10px; }
+.review-actions .btn { min-height: 30px; padding: 0 12px; font-size: 13px; }
+@media (max-width: 640px) {
+  .company-summary > :last-child { margin-left: 0; width: 100%; }
+}

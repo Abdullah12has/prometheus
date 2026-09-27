@@ -1,0 +1,103 @@
+.outreach { min-width: 0; }
+
+/* ---------- Gmail connection card ---------- */
+
+.gmail-card { gap: 12px; }
+.gmail-card__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gmail-card__identity { display: flex; align-items: center; gap: 10px; }
+.gmail-card__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.gmail-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+.gmail-status-pill--connected { background: var(--color-teal-faint); color: var(--color-teal); }
+.gmail-status-pill--disconnected { background: var(--color-navy-faint); color: var(--color-navy-muted); }
+.gmail-status-pill--reauth { background: var(--color-amber-faint); color: var(--color-amber); }
+.gmail-status-pill--unconfigured { background: var(--color-red-faint); color: var(--color-red); }
+
+.gmail-card__meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--color-navy-muted); }
+
+.gmail-disclosure { border-top: 1px solid var(--color-navy-faint); padding-top: 12px; font-size: 12.5px; color: var(--color-navy-muted); line-height: 1.6; display: flex; gap: 8px; align-items: flex-start; }
+.gmail-disclosure svg { flex-shrink: 0; margin-top: 2px; }
+
+.gmail-setup { border-top: 1px solid var(--color-navy-faint); padding-top: 12px; }
+.gmail-setup ol { margin: 8px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--color-navy-muted); display: flex; flex-direction: column; gap: 4px; }
+.gmail-setup code { background: var(--color-navy-faint); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+/* ---------- Two-pane layout (inbox) ---------- */
+
+.outreach-split { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+
+/* ---------- Conversation list ---------- */
+
+.conversation-list { display: flex; flex-direction: column; gap: 0; max-height: 640px; overflow-y: auto; }
+.conversation-list__item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: none; border-radius: var(--radius-sm); background: none; text-align: left; cursor: pointer; width: 100%; color: var(--color-navy); font: inherit; transition: background var(--transition-fast); }
+.conversation-list__item:hover { background: var(--color-navy-faint); }
+.conversation-list__item.is-active { background: var(--bg-active); }
+.conversation-list__item strong { font-size: 13.5px; font-weight: 500; }
+.conversation-list__item .muted { font-size: 12px; }
+
+/* ---------- Status / intent pills ---------- */
+
+.status-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+.status-pill--draft, .status-pill--awaiting_reply, .status-pill--unclear { background: var(--color-navy-faint); color: var(--color-navy-muted); }
+.status-pill--approved, .status-pill--interested, .status-pill--active { background: var(--color-teal-faint); color: var(--color-teal); }
+.status-pill--sending, .status-pill--needs_review, .status-pill--awaiting_review { background: var(--color-amber-faint); color: var(--color-amber); }
+.status-pill--sent, .status-pill--done { background: var(--color-teal-faint); color: var(--color-teal); }
+.status-pill--delivery_unknown { background: var(--color-amber-faint); color: var(--color-amber); }
+.status-pill--failed, .status-pill--optout, .status-pill--opted_out, .status-pill--declined, .status-pill--no, .status-pill--stopped { background: var(--color-red-faint); color: var(--color-red); }
+
+/* ---------- Message thread ---------- */
+
+.thread { display: flex; flex-direction: column; gap: 10px; max-height: 640px; overflow-y: auto; padding-right: 4px; }
+.message-bubble { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); padding: 12px 14px; }
+.message-bubble--inbound { background: var(--color-surface); }
+.message-bubble--outbound { background: var(--bg-subtle); border-color: var(--bg-subtle); }
+.message-bubble__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--color-navy-muted); }
+.message-bubble__body { margin-top: 6px; white-space: pre-wrap; font-size: 13.5px; line-height: 1.5; }
+.message-bubble__intent { margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.message-bubble__confirm { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.message-bubble__confirm select { width: auto; min-height: 30px; padding: 4px 8px; font-size: 12.5px; }
+
+/* ---------- Draft cards ---------- */
+
+.draft-list { display: flex; flex-direction: column; gap: 12px; }
+.draft-card { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; background: var(--color-surface); }
+.draft-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.draft-card__title { display: flex; flex-direction: column; gap: 2px; }
+.draft-card__meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--color-navy-muted); }
+.draft-card__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.draft-preview { border-radius: var(--radius-sm); padding: 14px 16px; background: var(--color-workspace); }
+.draft-preview__field { font-size: 12px; font-weight: 500; color: var(--color-navy-muted); margin-bottom: 2px; }
+.draft-preview__body { white-space: pre-wrap; font-size: 13.5px; line-height: 1.55; margin-bottom: 10px; }
+.draft-preview__hash { font-size: 11px; color: var(--color-navy-muted); word-break: break-all; }
+
+.linked-target { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12.5px; }
+
+/* ---------- Sequence step editor ---------- */
+
+.step-list { display: flex; flex-direction: column; gap: 10px; }
+.step-card { border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--color-workspace); }
+.step-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.step-card__head strong { font-size: 12.5px; }
+.step-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.step-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 500; color: var(--color-navy); }
+.step-card textarea { min-height: 70px; }
+
+/* ---------- Suppression / controls ---------- */
+
+.stop-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--color-navy-border); }
+.stop-banner--stopped { background: var(--color-red-faint); border-color: var(--color-red); }
+.stop-banner--running { background: var(--color-teal-faint); border-color: var(--color-teal); }
+
+.suppression-table { width: 100%; border-collapse: collapse; }
+.suppression-table th, .enrollment-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--color-navy-muted); padding: 8px 12px; border-bottom: 1px solid var(--color-navy-border); white-space: nowrap; }
+.suppression-table td, .enrollment-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); font-size: 13.5px; vertical-align: top; }
+.suppression-table tr:last-child td, .enrollment-table tr:last-child td { border-bottom: none; }
+
+.enrollment-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+
+@media (max-width: 760px) {
+  .outreach-split { grid-template-columns: 1fr; }
+  .conversation-list, .thread { max-height: none; }
+  .suppression-table, .enrollment-table { display: block; overflow-x: auto; }
+}

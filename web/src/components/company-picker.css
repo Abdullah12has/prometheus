@@ -1,0 +1,17 @@
+.company-picker-control {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.company-picker-control__search,
+.company-picker-control__select {
+  width: 100%;
+  min-width: 0;
+}
+
+.company-picker-control__status {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+}

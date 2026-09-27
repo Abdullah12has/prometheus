@@ -1,0 +1,29 @@
+name: permetheus
+services:
+  db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: permetheus
+      POSTGRES_DB: permetheus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - permetheus_database:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U permetheus -d permetheus']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  search:
+    image: searxng/searxng@sha256:5286edb35782454ab8a102c5eff6b54bff745853191b46aeead95f225aa6dfb6
+    ports:
+      - '127.0.0.1:8888:8080'
+    volumes:
+      - ./infra/search-settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      SEARXNG_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+    restart: unless-stopped
+volumes:
+  permetheus_database:

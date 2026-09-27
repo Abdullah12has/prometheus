@@ -1,0 +1,143 @@
+/* Buyers directory — list, discovery drawer, add dialog and profile.
+   Reuses shared tokens/forms/components from index.css; no second theme. */
+
+.buyer-detail { min-width: 0; }
+
+/* ---------- Badges ---------- */
+
+.buyer-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-round);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+.buyer-badge--kind-private_equity { background: var(--status-info-tint); color: var(--status-info); }
+.buyer-badge--kind-family_office { background: var(--status-success-tint); color: var(--status-success); }
+.buyer-badge--kind-holding_company { background: var(--status-warning-tint); color: var(--status-warning); }
+.buyer-badge--kind-unknown { background: var(--bg-muted); color: var(--text-secondary); }
+
+.buyer-badge--status-candidate { background: var(--bg-muted); color: var(--text-secondary); }
+.buyer-badge--status-profiled { background: var(--status-success-tint); color: var(--status-success); }
+.buyer-badge--status-excluded { background: var(--status-error-tint); color: var(--status-error); }
+
+.buyer-badge--research-pending { background: var(--bg-muted); color: var(--text-secondary); }
+.buyer-badge--research-queued,
+.buyer-badge--research-running { background: var(--status-info-tint); color: var(--status-info); }
+.buyer-badge--research-completed { background: var(--status-success-tint); color: var(--status-success); }
+.buyer-badge--research-failed { background: var(--status-error-tint); color: var(--status-error); }
+
+/* ---------- List table row ---------- */
+
+.buyer-table__row { cursor: pointer; }
+.buyer-table__row:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+
+/* ---------- Detail header / actions ---------- */
+
+.buyer-detail__actions { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.buyer-detail__company-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+.buyer-summary-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -8px; }
+.buyer-detail__mandate-note { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--radius-md); background: var(--status-info-tint); color: var(--text-strong); font-size: 13px; }
+.buyer-detail__mandate-note code { background: var(--bg-canvas); padding: 2px 6px; border-radius: var(--radius-xs); }
+
+.buyer-detail__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .buyer-detail__grid { grid-template-columns: 1fr; } }
+
+.buyer-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--text-body); }
+.buyer-tag-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.buyer-tag-list li { padding: 3px 10px; border-radius: var(--radius-round); background: var(--bg-muted); color: var(--text-secondary); font-size: 12.5px; }
+.buyer-fact__excerpt { color: var(--text-secondary); font-style: italic; }
+
+/* ---------- Add dialog reuses .dialog / .dialog-overlay from index.css ---------- */
+
+/* ---------- Discovery drawer ---------- */
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 40;
+  animation: fade-in var(--transition-medium);
+}
+
+.drawer {
+  width: min(28rem, 100vw);
+  max-width: 100vw;
+  height: 100vh;
+  background: var(--bg-canvas);
+  box-shadow: var(--shadow-elevated);
+  display: flex;
+  flex-direction: column;
+  animation: drawer-in var(--transition-medium);
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(16px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 16px 24px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.drawer__body {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 20px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.buyer-country-picker { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.buyer-country-group { display: flex; flex-direction: column; gap: 6px; }
+.buyer-country-group__label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.buyer-country-option { flex-wrap: nowrap; }
+
+.buyer-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.buyer-summary-grid dt { font-size: 12px; color: var(--text-secondary); margin-bottom: 2px; }
+.buyer-summary-grid dd { margin: 0; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.buyer-coverage-note { margin-top: 10px; }
+
+.buyer-source-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.buyer-source-list > li > strong { display: block; font-size: 13px; margin-bottom: 4px; }
+.buyer-source-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.buyer-source-list ul li { font-size: 12.5px; overflow-wrap: anywhere; }
+
+.buyer-run-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.buyer-run { border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.buyer-run__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.buyer-run__status { flex: 0 0 auto; padding: 2px 8px; border-radius: var(--radius-round); background: var(--bg-muted); color: var(--text-secondary); font-size: 11px; font-weight: 600; text-transform: capitalize; }
+.buyer-run__status--running { background: var(--status-info-tint); color: var(--status-info); }
+.buyer-run__status--paused { background: var(--status-warning-tint); color: var(--status-warning); }
+.buyer-run__status--failed { background: var(--status-error-tint); color: var(--status-error); }
+.buyer-run__status--completed { background: var(--status-success-tint); color: var(--status-success); }
+.buyer-run__progress { height: 5px; overflow: hidden; border-radius: var(--radius-round); background: var(--bg-hover); }
+.buyer-run__progress span { display: block; height: 100%; border-radius: inherit; background: var(--action-primary); transition: width 180ms ease; }
+.buyer-run__errors p { margin: 0; color: var(--status-error); font-size: 12px; overflow-wrap: anywhere; }
+.buyer-run__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.buyer-run__actions .btn { min-height: 30px; padding: 0 10px; font-size: 12.5px; }
+
+@media (max-width: 640px) {
+  .drawer { width: 100vw; }
+  .buyer-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .buyer-detail__actions { width: 100%; }
+  .buyer-detail__actions .btn { flex: 1 1 auto; }
+}
+
+/* Native modal keeps keyboard focus inside and restores it on close. */
+dialog.buyer-modal { margin: 0; padding: 0; border: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; color: inherit; }

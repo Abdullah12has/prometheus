@@ -1,0 +1,83 @@
+/* Scoped styles for VoicePanel. Builds on the tokens and shared primitives already defined in
+   src/index.css (.btn, .panel, .field-col, .checkbox-label, .field-error, .spin) instead of
+   duplicating them, matching the modern neutral theme used elsewhere in the app. */
+
+.voice-panel { display: grid; gap: 16px; color: var(--color-navy); }
+.voice-panel__header, .voice-panel__agent-row, .voice-panel__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.voice-panel__header { justify-content: space-between; }
+.voice-panel__header h2 { margin: 0; }
+.voice-panel__header p { margin: 4px 0 0; color: var(--color-navy-muted); font-size: 13px; }
+.voice-panel__availability { color: #8a3b32; font-size: 13px; font-weight: 600; }
+.voice-panel__availability.is-available { color: #257047; }
+.voice-panel__phone { margin: 0; padding: 10px 12px; background: var(--color-navy-faint); border-radius: var(--radius-sm); font-size: 13px; }
+
+.voice-panel__agent-row > label { min-width: 220px; flex: 1; font-size: 12.5px; font-weight: 500; color: var(--color-navy-muted); }
+.voice-panel__agent-row select { border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); padding: 9px 10px; background: var(--color-workspace); }
+
+.voice-form { gap: 12px; }
+.voice-form h3 { margin: 0 0 4px; }
+.voice-advanced { border-top: 1px solid var(--color-navy-border); padding-top: 10px; display: grid; gap: 12px; }
+.voice-advanced summary { cursor: pointer; font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.voice-advanced[open] summary { margin-bottom: 10px; }
+
+.voice-source { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--color-navy-border); padding-top: 12px; }
+.voice-source label { display: flex !important; align-items: center; gap: 8px !important; font-size: 13.5px; font-weight: 400; }
+.voice-source input { width: auto; }
+
+.voice-notice { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--color-navy-muted); font-size: 12.5px; line-height: 1.5; }
+
+.voice-capture { display: grid; gap: 10px; }
+.voice-script { margin: 0; padding: 10px 12px; background: var(--color-workspace); border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.5; color: var(--color-navy-muted); }
+.voice-script strong { color: var(--color-navy); }
+
+.voice-record__active { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.voice-record__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-red); animation: voice-pulse 1.4s ease-in-out infinite; }
+@keyframes voice-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+.voice-upload { display: flex; align-items: center; gap: 10px; }
+
+.voice-sample-preview { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.voice-sample-preview audio { height: 32px; }
+
+.voice-progress { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--color-navy-muted); }
+.voice-progress--ready { color: var(--color-teal); }
+
+.voice-panel__voice { padding: 16px 18px; }
+.voice-panel__voice-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.voice-panel__voice-row > div { flex: 1; min-width: 180px; }
+.voice-panel__voice-row p { margin: 2px 0 0; }
+.voice-panel__voice-row audio { width: min(100%, 300px); }
+
+.voice-replace-panel { border-top: 1px solid var(--color-navy-border); margin-top: 14px; padding-top: 14px; display: grid; gap: 12px; }
+
+.voice-panel__start { display: grid; gap: 12px; padding: 16px 18px; }
+.voice-panel__start .field-col select { border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); padding: 9px 10px; background: var(--color-workspace); }
+
+.voice-panel__line { margin: 0 0 8px; line-height: 1.5; }
+.voice-panel__line.is-agent { color: var(--color-navy); }
+.voice-panel__line.is-user { color: var(--color-navy-muted); }
+.voice-panel__tentative { opacity: .62; }
+.voice-panel__transcript { max-height: 300px; overflow: auto; border-top: 1px solid var(--color-navy-border); padding-top: 12px; }
+
+.voice-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--color-navy-border); margin: 0 0 4px; }
+.voice-tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 10px 14px; color: var(--color-navy-muted); cursor: pointer; font: inherit; font-weight: 600; }
+.voice-tabs button.is-active { color: var(--color-cobalt); border-bottom-color: var(--color-cobalt); }
+.voice-tabs button:focus-visible, .voice-panel__history-item:focus-visible { outline: 2px solid var(--color-cobalt); outline-offset: 2px; }
+
+.voice-panel__history { border-top: 1px solid var(--color-navy-border); padding-top: 14px; }
+.voice-panel__history > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.voice-panel__history h3 { margin: 0; font-size: 16px; }
+.voice-panel__history ul { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.voice-panel__history li { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); overflow: hidden; }
+.voice-panel__history-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; border: 0; background: transparent; color: inherit; text-align: left; padding: 12px; cursor: pointer; font: inherit; }
+.voice-panel__history-item span:first-child { display: grid; gap: 3px; }
+.voice-panel__history-item small { color: var(--color-navy-muted); }
+.voice-panel__history-detail { border-top: 1px solid var(--color-navy-border); padding: 12px; overflow-wrap: anywhere; }
+.voice-panel__history-detail p { margin: 0 0 8px; line-height: 1.45; }
+.voice-panel__hint { color: var(--color-navy-muted); font-size: 12px; margin: 0; }
+
+@media (max-width: 600px) { .voice-panel__voice-row audio { width: 100%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-record__dot { animation: none; }
+}

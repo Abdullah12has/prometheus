@@ -1,0 +1,34 @@
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+.venv/
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+data/
+logs/
+.superpowers/
+.DS_Store
+# Private planning material contains local source paths; keep it on this machine.
+docs/
+research/
+*.docx
+
+# Native builds and local browser test artifacts
+target/
+.playwright/
+test-results/
+playwright-report/
+
+.venv-speech/
+.playwright-mcp/
+
+.restore-stage-*/
+
+# Local Google OAuth credentials
+client_secret_*.json
