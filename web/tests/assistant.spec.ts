@@ -36,3 +36,49 @@ test('cleared voice audio cannot resume when late chunks arrive', async ({ page 
   })
   expect(result).toBe(true)
 })
+
+test('speaking stops queued audio, rejects late playback and keeps listening for the next turn', async ({ page }) => {
+  await page.goto('/')
+  const result = await page.evaluate(async () => {
+    const { VoiceAudio } = await import('/src/lib/voice-audio.ts')
+    const microphone = new AudioContext()
+    await microphone.resume()
+    const tone = microphone.createOscillator()
+    const gain = microphone.createGain()
+    gain.gain.value = 0
+    const destination = microphone.createMediaStreamDestination()
+    tone.connect(gain).connect(destination)
+    tone.start()
+    navigator.mediaDevices.getUserMedia = async () => destination.stream
+    const audio = new VoiceAudio()
+    const acks: string[] = []
+    let began: () => void = () => {}, ended: () => void = () => {}, played: () => void = () => {}
+    const speech = new Promise<void>(resolve => { began = resolve })
+    const silence = new Promise<void>(resolve => { ended = resolve })
+    const reply = new Promise<void>(resolve => { played = resolve })
+    try {
+      await audio.unlock()
+      await audio.startCapture(event => {
+        if (event.type === 'speech_start') began()
+        if (event.type === 'speech_end') ended()
+      }, id => { acks.push(id); if (id === 'next-reply') played() })
+      audio.enqueue('agent-speaking', 0, 24000, btoa('\x00\x10'.repeat(24000 * 4)))
+      audio.finish('agent-speaking')
+      gain.gain.value = 0.08
+      await speech
+      // A new packet can race with the server's clear event. It must never play.
+      audio.enqueue('late-packet', 0, 24000, 'not-valid-base64')
+      gain.gain.value = 0
+      await silence
+      audio.enqueue('late-packet', 1, 24000, 'not-valid-base64')
+      audio.enqueue('next-reply', 0, 24000, btoa('\x00\x10'.repeat(2400)))
+      audio.finish('next-reply')
+      await reply
+      return acks
+    } finally {
+      await audio.stop()
+      await microphone.close()
+    }
+  })
+  expect(result).toEqual(['next-reply'])
+})

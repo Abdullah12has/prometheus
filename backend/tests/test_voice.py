@@ -477,8 +477,8 @@ def test_replaced_synthesis_tasks_are_cleaned_up_on_stop():
 
 def test_broker_default_introduction_uses_agent_name_in_preview_and_call(v):
     agent = v.client.post('/api/voice/agents', json={'name': 'Alex'}).json()
-    assert 'explore potential buyers' in agent['introduction']
-    assert "even if selling isn't an immediate priority" in agent['introduction']
+    assert 'interested in selling your company' in agent['introduction']
+    assert len(agent['introduction'].split()) <= 25
     assert v.client.get(f"/api/voice/agents/{agent['id']}/preview").status_code == 200
     greeting = v.runtime.spoken[-1][0]
     assert "I'm Alex from Mergero" in greeting and 'AI' in greeting
@@ -500,3 +500,21 @@ def test_broker_flow_applies_without_company_context():
     assert 'Mergero' in prompt and 'acquisition outreach representative' in prompt
     assert 'email' in prompt and 'future' in prompt and 'do not contact' in prompt
     assert 'one question at a time' in prompt
+
+
+@pytest.mark.parametrize('tokens', [
+    ['Yes. ', 'Tell me more. ', 'Here are many more details. ', 'Another question?'],
+    ['This is a very long answer about business plans ' * 30],
+    ['First a short answer. ', 'Then a long explanation with more details ' * 30],
+])
+def test_spoken_replies_are_brief_even_if_the_model_ignores_instructions(tokens):
+    async def check():
+        llm = FakeLLM()
+        llm.tokens = tokens
+        conversation = voice_mod.Conversation(None, None, llm, None, uuid.uuid4(),
+            {'name': 'Alex', 'instructions': ''}, None, False)
+        sentences = [sentence async for sentence in conversation.generate()]
+        assert 1 <= len(sentences) <= 2
+        assert len(' '.join(sentences)) <= 240
+        assert all(sentence.endswith(('.', '?', '!')) for sentence in sentences)
+    asyncio.run(check())

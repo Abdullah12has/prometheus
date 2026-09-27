@@ -121,8 +121,9 @@ Client loop:
 
 1. Capture mic audio with an AudioWorklet, resample to 16 kHz Int16, and send frames of about
    100–200 ms.
-2. Run VAD locally. When speech starts while agent audio is playing, send `interrupt` and flush
-   playback on `clear`. When speech stops, send `end_turn`.
+2. Run VAD locally. When speech starts, flush playback immediately and send `interrupt`.
+   Reject any late audio for that utterance, including new packets arriving while the user
+   is speaking. Also honor server `clear` events. When speech stops, send `end_turn`.
 3. Play `audio` chunks in order through Web Audio. After `agent_done`, once the last chunk has
    played, send `playback_ack`.
 
@@ -130,7 +131,8 @@ Limits:
 
 - Each user turn is capped at 30 s. At the cap the server finalizes the turn itself (a limit, not a VAD).
 - The ASR backlog holds at most 20 s of audio. Beyond that, frames are refused with `audio_overflow`.
-- Replies are at most about 800 characters.
+- Generated replies are limited to two sentences and 240 characters, with a prompt asking
+  for at most 30 words and one question. Custom introductions are spoken as configured.
 - A call lasts at most the agent's `max_duration_seconds`.
 
 ### Transcript and consent

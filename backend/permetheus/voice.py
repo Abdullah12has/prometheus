@@ -50,39 +50,38 @@ MAX_UPLOAD = 10 * 1024 * 1024
 SAMPLE_RATE_CLONE = 24_000
 MIN_SAMPLE_SECONDS, MAX_SAMPLE_SECONDS = 3, 30
 FFMPEG_TIMEOUT = 30
-REPLY_MAX_CHARS = 800
+REPLY_MAX_CHARS = 240
 HISTORY_TURNS = 20
 AI_DISCLOSURE = re.compile(r"\b(AI|A\.I\.|artificial intelligence)\b", re.IGNORECASE)
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 BROWSER_LABEL = "Browser conversation"
 PHONE_LABEL = "Phone calling unavailable"
 
+
+def _bounded_sentence(text: str, limit: int) -> str:
+    text = text.strip()
+    if len(text) > limit:
+        text = text[:max(0, limit - 1)].rsplit(' ', 1)[0].rstrip(' ,;:.!?')
+        return text + '.' if text else ''
+    return text
+
+
 DEFAULT_INTRODUCTION = (
     "Hi, I'm {name} from Mergero, an AI acquisition representative. "
-    "Our team helps business owners explore potential buyers and understand what a transaction might involve. "
-    "Would that be useful to explore, even if selling isn't an immediate priority?"
+    "I was wondering whether you'd be interested in selling your company?"
 )
 
 SAFETY_PROMPT = (
     "You are Mergero's acquisition outreach representative, conducting an initial business-owner conversation. "
-    "Your role is professional M&A origination: offer useful perspective on potential buyer profiles and what a "
-    "transaction might involve, understand the owner's plans, and agree on a relevant follow-up. "
-    "Curiosity is enough to continue; do not require the owner to declare an intention to sell. You are not a general-purpose assistant. "
+    "Your role is professional M&A origination: understand the owner's interest, timing and conditions, "
+    "and seek permission for a colleague to gather company information by email. You are not a general-purpose assistant. "
     "You are an AI: never claim or imply to be human, and confirm you are an AI whenever asked. "
     "Do not impersonate a real person or claim qualifications, a buyer mandate, a valuation or an offer you do not have. "
-    "Speak in English, warmly and professionally, in one to three short natural sentences, with one question at a time. "
+    "Speak in English, warmly and professionally, in at most two short natural sentences and 30 words total, with one question at a time. Then stop and listen. "
     "No lists, markdown, emojis, pushiness or repeated introductions. Listen to the answer and remember details already given. "
-    "Respond to the introduction they actually heard; do not repeat its question after they answer. "
-    "If interested or open to exploring: acknowledge it, then ask about their plans for the business over the next few years "
-    "if not already known. Answer their questions before asking for information. Learn about the company and ownership "
-    "only where relevant, one question at a time; do not turn the conversation into a qualification checklist. "
-    "Use what they share to explain which buyer profiles might be relevant, clearly distinguishing general possibilities "
-    "from verified matches. Never claim active buyers, buyer mandates or a fit with acquisition criteria without verified "
-    "supporting evidence in the supplied context. Without that evidence, offer to have the team explore fit. "
-    "When there is a useful reason for a follow-up, ask whether they would welcome a discussion with the team about "
-    "relevant buyer profiles or transaction possibilities. Only after they agree, ask permission to email next steps "
-    "and any necessary information request. If they request email directly, respect that without forcing discovery first. "
-    "If permission is already given, do not ask for it again. Ask for the best email address if missing, then confirm it accurately, spelling it back "
+    "The introduction already asks about selling the company; do not repeat that question after they answer. "
+    "If interested or open to exploring: acknowledge it, then ask permission for the Mergero team to email a short "
+    "information request. If permission is already given, do not ask for it again. Ask for the best email address if missing, then confirm it accurately, spelling it back "
     "if unclear. Do not guess an address. Ask separately about a useful timeframe if not already given. "
     "Explain briefly when relevant that the email would request a company overview, ownership, recent revenue and "
     "profitability, and the owner's goals. Gather detailed financials over email, not an interrogation on this call. "
@@ -661,18 +660,24 @@ class Conversation:
         return [{"role": "system", "content": system}, *history]
 
     async def generate(self):
-        buffer, total = "", 0
-        async for token in self.llm.stream(self.messages(), max_tokens=160, interactive=True):
-            buffer += token
-            *sentences, buffer = SENTENCE_END.split(buffer)
-            for sentence in sentences:
-                if sentence.strip():
-                    total += len(sentence)
-                    yield sentence.strip()
-            if total >= REPLY_MAX_CHARS:
-                return
+        buffer, remaining, count = "", REPLY_MAX_CHARS, 0
+        async with contextlib.aclosing(self.llm.stream(self.messages(), max_tokens=80, interactive=True)) as tokens:
+            async for token in tokens:
+                buffer += token
+                *sentences, buffer = SENTENCE_END.split(buffer)
+                for sentence in sentences:
+                    text = _bounded_sentence(sentence, remaining)
+                    if text:
+                        yield text
+                        count += 1
+                        remaining -= len(text) + 1
+                    if count >= 2 or remaining < 2 or len(sentence.strip()) > len(text):
+                        return
+                if len(buffer.strip()) >= remaining:
+                    yield _bounded_sentence(buffer, remaining)
+                    return
         if buffer.strip():
-            yield buffer.strip()[:REPLY_MAX_CHARS]
+            yield _bounded_sentence(buffer, remaining)
 
     @staticmethod
     async def fixed(text: str):

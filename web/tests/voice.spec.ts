@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 
 test.use({ permissions: ['microphone'], launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } })
 
-test('browser audio processing, local ASR, model response and audio playback', async ({ page }) => {
+test('user speech interrupts the live agent and gets a brief response through local ASR and TTS', async ({ page }) => {
   test.skip(process.env.RUN_VOICE_E2E !== '1', 'Explicit opt-in runs the real local models and configured LLM')
   test.setTimeout(180_000)
   const secret = readFileSync('../.env', 'utf8').split('\n').find(line => line.startsWith('ADMIN_PASSWORD='))?.slice('ADMIN_PASSWORD='.length)
@@ -12,6 +12,26 @@ test('browser audio processing, local ASR, model response and audio playback', a
   let agentId: string | undefined
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
+  let firstId = ''
+  let firstAudio: () => void = () => {}, cleared: (id: string) => void = () => {}, played: () => void = () => {}
+  const speaking = new Promise<void>(resolve => { firstAudio = resolve })
+  const interrupted = new Promise<string>(resolve => { cleared = resolve })
+  const replyPlayed = new Promise<void>(resolve => { played = resolve })
+  const replies: string[] = []
+  page.on('websocket', socket => {
+    if (!socket.url().includes('/api/voice/')) return
+    socket.on('framereceived', event => {
+      const data = JSON.parse(event.payload.toString())
+      if (data.type === 'audio' && !firstId) { firstId = data.utterance_id; firstAudio() }
+      if (data.type === 'clear') cleared(data.utterance_id)
+      if (data.type === 'agent_text' && firstId && data.utterance_id !== firstId) replies.push(data.text)
+    })
+    socket.on('framesent', event => {
+      if (typeof event.payload !== 'string') return
+      const data = JSON.parse(event.payload)
+      if (data.type === 'playback_ack' && data.utterance_id !== firstId) played()
+    })
+  })
   // Chromium's fake microphone fails at OS capture on this machine. Replace only
   // the device boundary; the app's resampler, VAD, WebSocket and models stay real.
   await page.addInitScript(async (wav) => {
@@ -24,7 +44,7 @@ test('browser audio processing, local ASR, model response and audio playback', a
       source.buffer = buffer
       const destination = context.createMediaStreamDestination()
       source.connect(destination)
-      source.start(context.currentTime + 3)
+      window.addEventListener('verification-speech', () => source.start(), { once: true })
       source.onended = () => setTimeout(() => void context.close(), 3000)
       return destination.stream
     }
@@ -37,7 +57,6 @@ test('browser audio processing, local ASR, model response and audio playback', a
     await page.getByLabel('Name', { exact: true }).fill('Temporary browser voice verification')
     await page.getByLabel('Introduction', { exact: false }).fill('Hello. I am an AI assistant. What would make a deal work for you?')
     await page.getByText('Advanced settings (optional)', { exact: true }).click()
-    await page.getByLabel('Additional instructions').fill('Reply in one short sentence.')
     // This test only verifies the live call path, not cloning, so skip the sample and use the
     // bundled voice.
     await page.getByLabel('Use the bundled voice', { exact: true }).check()
@@ -48,9 +67,15 @@ test('browser audio processing, local ASR, model response and audio playback', a
     // Off by default: turning this on is what makes this personal test's transcript get saved.
     await page.getByLabel("Save transcript", { exact: true }).check()
     await page.getByRole('button', { name: 'Start browser conversation', exact: true }).click()
+    await speaking
+    await page.evaluate(() => window.dispatchEvent(new Event('verification-speech')))
+    expect(await interrupted).toBe(firstId)
     const captions = page.getByLabel('Conversation captions')
     await expect(captions.locator('.is-user').filter({ hasText: /deal work for you/i }).first()).toBeVisible({ timeout: 120_000 })
     await expect.poll(async () => captions.locator('.is-agent').count(), { timeout: 60_000 }).toBeGreaterThan(1)
+    await replyPlayed
+    expect(replies.length).toBeLessThanOrEqual(2)
+    expect(replies.join(' ').length).toBeLessThanOrEqual(240)
     await page.getByRole('button', { name: 'End conversation', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Start browser conversation', exact: true })).toBeEnabled()
     expect(errors).toEqual([])

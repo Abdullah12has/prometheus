@@ -39,7 +39,7 @@ type VoiceSource = 'custom' | 'bundled'
 const voiceError = (cause: unknown) => cause instanceof ApiError ? `${cause.message}${cause.detail ? ` (${JSON.stringify(cause.detail)})` : ''}` : cause instanceof Error ? cause.message : 'The request could not be completed.'
 const micErrorMessage = (cause: unknown) => { const info = describeMicError(cause); return `${info.title}: ${info.message}` }
 
-const DEFAULT_INTRODUCTION = "Hi, I'm {name} from Mergero, an AI acquisition representative. Our team helps business owners explore potential buyers and understand what a transaction might involve. Would that be useful to explore, even if selling isn't an immediate priority?"
+const DEFAULT_INTRODUCTION = "Hi, I'm {name} from Mergero, an AI acquisition representative. I was wondering whether you'd be interested in selling your company?"
 const MIN_SAMPLE_SECONDS = 3
 const MAX_SAMPLE_SECONDS = 30
 const SAMPLE_SCRIPT = 'The quick brown fox jumps over the lazy dog while autumn leaves drift across the quiet garden path, and a distant train whistle echoes through the valley.'
@@ -402,7 +402,7 @@ export function VoicePanel() {
         if (data.type === 'ready') {
           void audio.startCapture((capture: VoiceAudioEvent) => {
             if (socket.readyState !== WebSocket.OPEN) return
-            if (capture.type === 'speech_start') { audio.interrupt(); socket.send(JSON.stringify({ type: 'interrupt' })) }
+            if (capture.type === 'speech_start') socket.send(JSON.stringify({ type: 'interrupt' }))
             else if (capture.type === 'speech_end') socket.send(JSON.stringify({ type: 'end_turn' }))
             else if (capture.type === 'pcm') socket.send(new Int16Array(capture.samples).buffer)
           }, (utteranceId) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'playback_ack', utterance_id: utteranceId })) }).then(() => setCallState('live')).catch((cause) => { setError(voiceError(cause)); void stopCall() })

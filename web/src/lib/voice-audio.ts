@@ -11,6 +11,7 @@ export class VoiceAudio {
   private processor: AudioWorkletNode | null = null
   private mute: GainNode | null = null
   private currentUtterance: string | null = null
+  private userSpeaking = false
   private cleared = new Set<string>()
   private buffers = new Map<number, AudioBuffer>()
   private sources = new Set<AudioBufferSourceNode>()
@@ -42,7 +43,13 @@ export class VoiceAudio {
     this.processor = new AudioWorkletNode(this.context, 'voice-capture', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] })
     this.mute = this.context.createGain()
     this.mute.gain.value = 0
-    this.processor.port.onmessage = (event: MessageEvent<VoiceAudioEvent>) => onEvent(event.data)
+    this.processor.port.onmessage = (event: MessageEvent<VoiceAudioEvent>) => {
+      if (event.data.type === 'speech_start') {
+        this.userSpeaking = true
+        this.interrupt()
+      } else if (event.data.type === 'speech_end') this.userSpeaking = false
+      onEvent(event.data)
+    }
     this.onAck = onAck
     this.source.connect(this.processor).connect(this.mute).connect(this.context.destination)
     await this.context.resume()
@@ -51,6 +58,7 @@ export class VoiceAudio {
   enqueue(id: string, seq: number, rate: number, base64: string) {
     const context = this.context
     if (!context || this.cleared.has(id)) return
+    if (this.userSpeaking) { this.clear(id); return }
     if (id !== this.currentUtterance) {
       this.flush()
       this.currentUtterance = id
@@ -130,6 +138,7 @@ export class VoiceAudio {
 
   async stop() {
     this.captureGeneration++
+    this.userSpeaking = false
     this.cleared.clear()
     this.flush()
     this.currentUtterance = null

@@ -23,12 +23,13 @@ class VoiceCaptureProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < input.length; i++) energy += input[i] * input[i]
     const rms = Math.sqrt(energy / input.length)
     // ponytail: energy VAD with hysteresis; use a local speech classifier if sustained non-speech still triggers.
-    const threshold = Math.max(this.playing ? 0.035 : 0.015, this.noiseFloor * 3)
+    const threshold = Math.max(0.015, this.noiseFloor * 3)
     const loud = rms > (this.speech ? Math.max(0.008, this.noiseFloor * 1.8) : threshold)
     if (!this.speech) {
-      if (!loud) this.noiseFloor = this.noiseFloor * 0.98 + rms * 0.02
+      // Echo cancellation runs at capture. Don't learn residual agent audio as room noise.
+      if (!loud && !this.playing) this.noiseFloor = this.noiseFloor * 0.98 + rms * 0.02
       this.loudFrames = loud ? this.loudFrames + input.length : 0
-      if (this.loudFrames >= sampleRate * (this.playing ? 0.2 : 0.12)) {
+      if (this.loudFrames >= sampleRate * 0.12) {
         this.speech = true
         this.frame.push(...this.preRoll)
         this.preRoll = []
