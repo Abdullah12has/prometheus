@@ -516,7 +516,6 @@ function DraftCard({ draft, dir, onReload }: { draft: OutreachDraft; dir: Direct
   }
 
   async function send() {
-    if (!window.confirm('Send this exact approved message now? This cannot be undone.')) return
     setBusy('send'); setLocalError(null)
     try {
       await api.post(`/api/outreach/drafts/${draft.id}/send`, { version: draft.version, content_hash: draft.content_hash })

@@ -477,7 +477,8 @@ def test_replaced_synthesis_tasks_are_cleaned_up_on_stop():
 
 def test_broker_default_introduction_uses_agent_name_in_preview_and_call(v):
     agent = v.client.post('/api/voice/agents', json={'name': 'Alex'}).json()
-    assert 'selling your company' in agent['introduction']
+    assert 'explore potential buyers' in agent['introduction']
+    assert "even if selling isn't an immediate priority" in agent['introduction']
     assert v.client.get(f"/api/voice/agents/{agent['id']}/preview").status_code == 200
     greeting = v.runtime.spoken[-1][0]
     assert "I'm Alex from Mergero" in greeting and 'AI' in greeting
