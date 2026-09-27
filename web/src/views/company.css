@@ -1,0 +1,19 @@
+.company-detail { min-width: 0; }
+.company-summary { display: flex; align-items: center; gap: 12px; margin: 20px 0 16px; flex-wrap: wrap; }
+.company-summary__status { color: var(--text-muted); font-size: 13px; }
+.company-summary > :last-child { margin-left: auto; }
+.company-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+.company-tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); padding: 10px 14px; cursor: pointer; white-space: nowrap; }
+.company-tabs button.is-active { color: var(--text); border-bottom-color: var(--accent); }
+.company-panels { display: grid; gap: 16px; }
+.company-detail details { margin-top: 12px; }
+.company-detail summary { cursor: pointer; color: var(--accent); padding: 8px 0; }
+.company-detail .record-list__item > a { display: inline-flex; align-items: center; gap: 5px; }
+.identity-form { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 14px; display: grid; gap: 8px; }
+.identity-form textarea { min-height: 70px; }
+.review-actions { display: flex; gap: 8px; margin-top: 10px; }
+@media (max-width: 640px) {
+  .company-summary { align-items: flex-start; }
+  .company-summary > :last-child { margin-left: 0; width: 100%; justify-content: center; }
+  .company-tabs { margin-left: -16px; margin-right: -16px; padding: 0 16px; }
+}

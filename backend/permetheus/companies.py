@@ -63,6 +63,7 @@ class CompanyIn(CompanyFields):
 
 
 class CompanyPatch(CompanyFields):
+    confirmation_basis: str | None = Field(None, min_length=5, max_length=2000)
     industry: str | None = Field(None, max_length=300)
     description: str | None = Field(None, max_length=20000)
     # name/status accept omission but reject explicit null.
@@ -241,6 +242,10 @@ def get_company(company_id: uuid.UUID, db: Session = Depends(get_db)):
 def update_company(company_id: uuid.UUID, body: CompanyPatch, db: Session = Depends(get_db)):
     company = get_or_404(db, Company, company_id)
     changes = body.model_dump(exclude_unset=True)
+    basis = changes.pop("confirmation_basis", None)
+    if basis and changes.get("status") == CompanyStatus.confirmed:
+        record_activity(db, "company.identity_confirmed", "Company identity confirmed", company.id, basis=basis)
+        company.last_verified_at = utcnow()
     for key, value in changes.items():
         setattr(company, key, value)
     if "name" in changes:

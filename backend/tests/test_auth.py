@@ -52,6 +52,6 @@ def test_settings_status_reports_presence_not_values():
         body = r.json()
         assert "secret-value-456" not in r.text and "id-value-123" not in r.text and PASSWORD not in r.text
         connectors = {x["id"]: x for x in body["connectors"]}
-        assert connectors["gmail"]["configured"] and not connectors["gmail"]["implemented"]
+        assert connectors["gmail"]["configured"] and connectors["gmail"]["implemented"]
         assert connectors["phone"]["missing"] == ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "PUBLIC_BASE_URL"]
-        assert body["outbound_dispatch"] == {"email": "disabled", "phone": "disabled"}
+        assert body["outbound_dispatch"] == {"email": "disconnected", "phone": "disabled"}

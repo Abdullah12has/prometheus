@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import auth, companies, contacts, errors, provenance, workspace
+from . import auth, companies, contacts, errors, provenance, workspace, notes, deals, mail, voice, assistant, documents
 from .config import Settings
 from .db import init_db, make_engine, make_sessionmaker
 from .speech_runtime import SpeechRuntime
@@ -27,6 +27,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             log.error("database bootstrap failed: %s", exc)
         yield
         await app.state.speech.close()
+        if getattr(app.state, "gmail_http", None) is not None:
+            app.state.gmail_http.close()
         engine.dispose()
 
     app = FastAPI(title="Permetheus API", version="0.1.0", lifespan=lifespan,
@@ -39,7 +41,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=sorted(settings.allowed_origins), allow_credentials=True,
                        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-CSRF-Token"])
     errors.install(app)
-    for module in (auth, workspace, companies, contacts, provenance):
+    for module in (auth, workspace, companies, contacts, provenance, notes, deals, mail, voice, assistant, documents):
         app.include_router(module.router)
     app.include_router(workspace.public)
+    app.include_router(mail.oauth_router)
     return app

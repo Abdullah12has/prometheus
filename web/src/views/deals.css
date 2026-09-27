@@ -1,0 +1,489 @@
+/* Shared styles for the Futures (owner conditions) and Matches (buyer mandates,
+   match runs, opportunities, historical deals) views. Reuses design tokens from
+   index.css; adds only what those two views need. */
+
+/* ---------- Company picker ---------- */
+
+.company-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.company-picker select {
+  border: 1px solid var(--color-navy-border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  background: var(--color-surface);
+  color: var(--color-navy);
+}
+
+/* ---------- Tabs ---------- */
+
+.deals-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-navy-border);
+  overflow-x: auto;
+}
+
+.deals-tabs__btn {
+  border: none;
+  background: none;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-navy-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.deals-tabs__btn:hover {
+  color: var(--color-navy);
+}
+
+.deals-tabs__btn--active {
+  color: var(--color-cobalt-strong);
+  border-bottom-color: var(--color-cobalt);
+}
+
+/* ---------- Badges ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge--pass { background: var(--color-teal-faint); color: var(--color-teal); }
+.badge--fail { background: var(--color-red-faint); color: var(--color-red); }
+.badge--unknown { background: var(--color-amber-faint); color: var(--color-amber); }
+.badge--neutral { background: var(--color-navy-faint); color: var(--color-navy-muted); }
+.badge--hard { background: var(--color-navy-faint); color: var(--color-navy); }
+.badge--soft { background: var(--color-cobalt-faint); color: var(--color-cobalt-strong); }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-pill--compatible { background: var(--color-teal-faint); color: var(--color-teal); }
+.status-pill--research_needed { background: var(--color-amber-faint); color: var(--color-amber); }
+.status-pill--excluded { background: var(--color-red-faint); color: var(--color-red); }
+
+/* ---------- Condition builder ---------- */
+
+.condition-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.condition-row {
+  border: 1px solid var(--color-navy-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--color-workspace);
+}
+
+.condition-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.condition-row__head label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--color-navy);
+}
+
+.condition-row__strength {
+  display: flex;
+  gap: 4px;
+}
+
+.strength-btn {
+  border: 1px solid var(--color-navy-border);
+  background: var(--color-surface);
+  color: var(--color-navy-muted);
+  font-size: 11.5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.strength-btn--active-hard { background: var(--color-navy); color: #fff; border-color: var(--color-navy); }
+.strength-btn--active-soft { background: var(--color-cobalt); color: #fff; border-color: var(--color-cobalt); }
+.strength-btn--active-unknown { background: var(--color-amber); color: #fff; border-color: var(--color-amber); }
+
+.condition-row__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.condition-row__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-navy-muted);
+}
+
+.condition-row__fields input,
+.condition-row__fields select {
+  border: 1px solid var(--color-navy-border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  background: var(--color-surface);
+  font-size: 13px;
+}
+
+.multi-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.multi-check label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-navy-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--color-navy-muted);
+  background: var(--color-surface);
+}
+
+.multi-check input { width: auto; }
+
+/* ---------- Preference / profile timeline ---------- */
+
+.profile-card {
+  border: 1px solid var(--color-navy-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-card--effective {
+  border-color: var(--color-cobalt);
+  background: var(--color-cobalt-faint);
+}
+
+.profile-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-card__conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.confirm-note {
+  font-size: 12px;
+  color: var(--color-navy-muted);
+  border-top: 1px solid var(--color-navy-faint);
+  padding-top: 8px;
+}
+
+.hypothetical-tag {
+  color: var(--color-amber);
+  font-weight: 600;
+}
+
+.confirmed-tag {
+  color: var(--color-teal);
+  font-weight: 600;
+}
+
+/* ---------- Match / opportunity cards ---------- */
+
+.match-card {
+  border: 1px solid var(--color-navy-border);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--color-surface);
+}
+
+.match-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.match-card__scores {
+  display: flex;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--color-navy-muted);
+}
+
+.match-card__scores strong {
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.check-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 6px 0;
+  border-top: 1px solid var(--color-navy-faint);
+}
+
+.check-line:first-child { border-top: none; }
+
+.check-line__detail {
+  flex: 1;
+  color: var(--color-navy);
+}
+
+.check-line__citations {
+  color: var(--color-navy-muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.questions-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--color-navy-muted);
+}
+
+.details-toggle {
+  border: none;
+  background: none;
+  color: var(--color-cobalt);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+/* ---------- Analytics ---------- */
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.analytics-card {
+  border: 1px solid var(--color-navy-border);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  background: var(--color-surface);
+}
+
+.analytics-card h3 {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.analytics-card dl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.analytics-card .count-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--color-navy-muted);
+}
+
+.analytics-card .count-row strong {
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- CSV import ---------- */
+
+.csv-drop {
+  border: 1px dashed var(--color-navy-border);
+  border-radius: var(--radius-md);
+  padding: 22px;
+  text-align: center;
+  color: var(--color-navy-muted);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.csv-errors {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+  border: 1px solid var(--color-red-faint);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--color-red);
+  background: var(--color-red-faint);
+}
+
+/* ---------- Graph ---------- */
+
+.deals-graph {
+  border: 1px solid var(--color-navy-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.deals-graph__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.deals-graph svg text {
+  font-family: var(--font-sans);
+  fill: var(--color-navy);
+}
+
+.deals-graph__edge {
+  transition: stroke-opacity var(--transition-fast), stroke-width var(--transition-fast);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deals-graph__edge {
+    transition: none;
+  }
+}
+
+.deals-graph__edge--dim {
+  stroke-opacity: 0.25;
+}
+
+.deals-graph__legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--color-navy-muted);
+}
+
+.deals-graph__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.deals-graph__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.deals-graph__evidence {
+  border-top: 1px solid var(--color-navy-faint);
+  padding-top: 10px;
+  font-size: 12.5px;
+}
+
+/* ---------- Section helpers ---------- */
+
+.deals-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.subtle-divider {
+  border: none;
+  border-top: 1px solid var(--color-navy-faint);
+  margin: 4px 0;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.form-note {
+  font-size: 12px;
+  color: var(--color-navy-muted);
+  line-height: 1.5;
+}
+
+.pill-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-navy-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.pill-toggle button {
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-navy-muted);
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.pill-toggle button.active {
+  background: var(--color-cobalt);
+  color: #fff;
+}
+
+.list-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}

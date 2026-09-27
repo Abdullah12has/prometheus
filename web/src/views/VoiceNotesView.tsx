@@ -1,15 +1,10 @@
-import { Mic } from 'lucide-react'
-import { PlaceholderView } from './PlaceholderView'
+import { NotesPanel } from '../components/NotesPanel'
+import { VoicePanel } from '../components/VoicePanel'
 
 export function VoiceNotesView() {
-  return (
-    <PlaceholderView
-      title="Voice & notes"
-      lede="Call recordings, meeting notes and their reviewed transcripts."
-      icon={<Mic size={28} aria-hidden="true" />}
-      emptyTitle="Nothing recorded yet"
-      emptyDescription="Recordings and notes appear here once the recording and transcription API is connected. Raw transcript and reviewed summary stay visibly separate."
-      expectedApi="GET /api/recordings"
-    />
-  )
+  return <div className="page">
+    <header className="page__header"><h1>Voice & notes</h1><p className="page__lede">Have a browser conversation or save a meeting recording.</p></header>
+    <VoicePanel />
+    <NotesPanel />
+  </div>
 }

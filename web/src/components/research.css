@@ -1,0 +1,41 @@
+.research-panel { display: grid; gap: 14px; min-width: 0; }
+.research-panel__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.research-panel__header h2 { margin: 0; }
+.research-panel__header p, .research-muted, .research-disclaimer { color: var(--color-navy-muted); font-size: 12.5px; line-height: 1.5; }
+.research-panel__header p { margin-top: 4px; }
+.research-error { color: var(--color-red); background: var(--color-red-faint); padding: 9px 11px; border-radius: var(--radius-sm); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.research-button { display: inline-flex; justify-content: center; align-items: center; border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); padding: 7px 10px; color: var(--color-navy); background: var(--color-surface); cursor: pointer; font: inherit; font-size: 12.5px; }
+.research-button:hover:not(:disabled) { background: var(--color-navy-faint); }
+.research-button:disabled { cursor: not-allowed; opacity: .58; }
+.research-button--primary { border-color: var(--color-cobalt); background: var(--color-cobalt); color: white; }
+.research-button--primary:hover:not(:disabled) { background: var(--color-cobalt-strong); }
+.research-job, .research-run-status, .discovery-run { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); padding: 11px 12px; }
+.research-job { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12.5px; }
+.research-job > p { flex-basis: 100%; color: var(--color-red); overflow-wrap: anywhere; }
+.research-job__actions, .discovery-run__actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.research-run-status, .discovery-run__title { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.research-run-status time, .discovery-run time { color: var(--color-navy-muted); font-size: 11px; }
+.research-disclaimer { margin-top: -8px; }
+.research-coverage { border-top: 1px solid var(--color-navy-border); padding-top: 10px; }
+.research-coverage h3, .discovery-runs h3, .discovery-form h3 { margin: 0 0 7px; font-size: 13px; font-weight: 600; color: var(--color-navy); }
+.research-coverage h3 span { margin-left: 4px; padding: 1px 6px; border-radius: 10px; background: var(--color-navy-faint); color: var(--color-navy-muted); font-size: 10px; }
+.research-coverage ul { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.research-coverage > p { color: var(--color-navy-muted); font-size: 12px; }
+.research-coverage.is-error li { color: var(--color-red); }
+.discovery-panel { gap: 16px; }
+.discovery-form, .discovery-schedule form { display: grid; gap: 11px; }
+.discovery-form { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); padding: 13px; }
+.discovery-form label, .discovery-schedule label { display: grid; gap: 5px; color: var(--color-navy); font-size: 12px; font-weight: 600; }
+.discovery-form input, .discovery-form select, .discovery-schedule input:not([type=checkbox]), .discovery-schedule select { width: 100%; border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-navy); padding: 7px 8px; font: inherit; }
+.discovery-form__dates, .discovery-form__limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.discovery-form .research-muted, .discovery-schedule .research-muted { margin: 0; }
+.discovery-schedule { border-top: 1px solid var(--color-navy-border); padding-top: 10px; }
+.discovery-schedule summary { cursor: pointer; color: var(--color-cobalt); font-size: 12.5px; font-weight: 600; }
+.discovery-schedule form { padding-top: 12px; }
+.discovery-schedule .discovery-schedule__toggle { display: flex; align-items: center; gap: 8px; }
+.discovery-schedule__toggle input { margin: 0; }
+.discovery-runs { display: grid; gap: 9px; }
+.discovery-run { display: grid; gap: 7px; }
+.discovery-run > p { margin: 0; font-size: 12px; line-height: 1.5; }
+.discovery-run__actions { margin-top: 2px; }
+@media (max-width: 520px) { .discovery-form__dates, .discovery-form__limits { grid-template-columns: 1fr; } }

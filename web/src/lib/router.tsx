@@ -13,6 +13,7 @@ import {
 
 interface RouterState {
   path: string
+  search: string
   navigate: (path: string) => void
 }
 
@@ -24,22 +25,25 @@ function normalize(path: string): string {
 }
 
 export function RouterProvider({ children }: { children: ReactNode }) {
-  const [path, setPath] = useState(() => normalize(window.location.pathname))
+  const [path, setPath] = useState(() => normalize(window.location.pathname + window.location.search))
 
   useEffect(() => {
-    const onPopState = () => setPath(normalize(window.location.pathname))
+    const onPopState = () => setPath(normalize(window.location.pathname + window.location.search))
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
   const navigate = useCallback((next: string) => {
     const normalized = normalize(next)
-    if (normalized === window.location.pathname) return
+    if (normalized === window.location.pathname + window.location.search) return
     window.history.pushState({}, '', normalized)
     setPath(normalized)
   }, [])
 
-  const value = useMemo(() => ({ path, navigate }), [path, navigate])
+  const value = useMemo(() => {
+    const url = new URL(path, window.location.origin)
+    return { path: url.pathname, search: url.search, navigate }
+  }, [path, navigate])
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>
 }

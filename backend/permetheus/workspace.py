@@ -68,9 +68,9 @@ def health(db: Session = Depends(get_db)):
 
 # (id, label, env fields, note). Implemented flags flip as each connector ships.
 CONNECTORS = [
-    ("registry_fi", "Finnish trade register", [], "Public open-data API, no credentials needed. Importer not implemented yet."),
+    ("registry_fi", "Finnish trade register", [], "Public open-data API; bounded discovery with source records."),
     ("gmail", "Gmail", ["google_client_id", "google_client_secret"],
-     "Create a Google OAuth client and set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Mailbox connection not implemented yet."),
+     "Configure Google OAuth credentials, then connect your mailbox in Outreach."),
     ("llm", "Language model", ["litellm_base_url", "litellm_api_key", "litellm_model"],
      "Set LITELLM_BASE_URL, LITELLM_API_KEY and LITELLM_MODEL."),
     ("web_search", "Web search", ["searxng_url"], "Set SEARXNG_URL to a local SearXNG instance with JSON output enabled."),
@@ -83,17 +83,23 @@ def connector_status(settings: Settings) -> list[ConnectorOut]:
     out = []
     for cid, label, fields, note in CONNECTORS:
         missing = [f.upper() for f in fields if getattr(settings, f) is None]
-        out.append(ConnectorOut(id=cid, label=label, configured=not missing, implemented=False, missing=missing, note=note))
+        out.append(ConnectorOut(id=cid, label=label, configured=not missing, implemented=cid != "phone", missing=missing, note=note))
+    missing = [name for name, path in (("ASR_BINARY", settings.asr_binary), ("ASR_MODEL_PATH", settings.asr_model_path), ("TTS_PYTHON", settings.tts_python)) if path is None or not path.is_file()]
+    out.append(ConnectorOut(id="voice", label="Local browser voice", configured=not missing, implemented=True, missing=missing, note="Local speech recognition and saved voice agents; microphone permission is requested in the browser."))
     return out
 
 
 @router.get("/settings/status")
 def settings_status(request: Request, db: Session = Depends(get_db)):
     settings: Settings = request.app.state.settings
+    from .mail import GmailAccount, Suppression
+    account = db.scalar(select(GmailAccount).limit(1))
+    stopped = db.scalar(select(Suppression.id).where(Suppression.kind == "global", Suppression.value == "*"))
+    email = "stopped" if stopped else "approval_required" if account and not account.needs_reauth else "disconnected"
     return {
         "database": "ok" if database_ok(db) else "unavailable",
         "auth": {"configured": settings.admin_password is not None},
-        "outbound_dispatch": {"email": "disabled", "phone": "disabled"},
+        "outbound_dispatch": {"email": email, "phone": "disabled"},
         "connectors": connector_status(settings),
     }
 

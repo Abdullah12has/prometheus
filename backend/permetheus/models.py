@@ -70,6 +70,7 @@ class FinancialStatus(StrEnum):
 
 
 class FinancialScope(StrEnum):
+    unknown = "unknown"
     entity = "entity"
     consolidated = "consolidated"
 
