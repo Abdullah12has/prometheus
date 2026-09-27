@@ -5,7 +5,7 @@ Module: `backend/permetheus/mail.py`. It declares its own tables on the shared `
 - `mail.router` (prefix `/api`, every route requires the operator session and `X-CSRF-Token` for writes)
 - `mail.oauth_router` (prefix `/oauth/google`, the browser callback; bound by state + cookie instead of the session)
 
-## Root integration (not done by this module)
+## Application integration
 
 ```python
 from . import mail
@@ -13,7 +13,7 @@ app.include_router(mail.router)
 app.include_router(mail.oauth_router)
 ```
 
-Settings the root must add (read with `getattr`, so a missing field reports "not configured" and doesn't crash):
+Configured settings (missing OAuth credentials report "not configured"):
 
 | Setting | Purpose |
 |---|---|
@@ -53,7 +53,7 @@ Tokens never reach the browser or a model. `GET /api/gmail/status` returns no to
 
 **One mailbox per workspace.** Conversations, dispatches and Message-IDs are not tagged with a mailbox, so connecting a *different* address is refused (`?gmail=error&reason=mailbox_mismatch`, and the new grant is revoked) while any conversation or dispatch exists. With no retained history, the old mailbox's token is revoked and its row replaced. No schema change or migration is needed for this.
 
-Scheduling (e.g. every 60 s) belongs to the caller. This module does not start background loops.
+The application scheduler syncs replies, reconciles uncertain deliveries, then runs due approved sequence steps every 60 seconds.
 
 ### Drafts, approval, send
 

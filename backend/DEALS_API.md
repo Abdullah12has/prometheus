@@ -2,16 +2,15 @@
 
 Module: `permetheus.deals` (`router`, prefix `/api`). Every route needs the session cookie. Unsafe methods also need `X-CSRF-Token`. Errors use the core envelope: `{"error": {"code", "message", "details?"}}`. Request models reject unknown fields. Money values are JSON strings (Decimal), and currencies are never converted.
 
-## Integration (root)
+## Application integration
 
 - `from . import deals`, then `app.include_router(deals.router)`. Importing the module registers its tables on `models.Base`, so `init_db` creates them.
 - `deals` imports `mail.OutreachDraft` at module level. `mail` must therefore import `deals` lazily, inside the function (see the send gate below).
 - Tables: `buyer_mandates`, `buyer_mandate_versions`, `owner_preference_profiles`, `futures_scenarios`, `match_runs`, `match_results`, `deal_opportunities`, `opportunity_outcomes`, `historical_deals`, `proposal_drafts`.
-- `backend/tests/test_deals.py` has a `permetheus.__path__` shim for testing against a separate core checkout. It does nothing once `deals.py` lives in the package, and it can be removed then. The test fixture includes `deals.router` and `mail.router` only if the app has not already registered them.
 
-### Mail send gate (root must add)
+### Mail send gate
 
-In `mail._check_sendable(db, draft)`, before the claim, add:
+`mail._check_sendable(db, draft)` validates the disclosure before claiming delivery and rechecks it before sending:
 
 ```python
 from .deals import validate_deal_disclosure  # lazy: deals imports mail
@@ -350,3 +349,7 @@ POST `/api/simulations/replay`: `{as_of (tz, not future), company_id?}`
 - Opportunities are not recomputed automatically when facts change. `stale` reports it instead.
 - The opportunity list recomputes company facts per row for staleness, which is fine up to a few hundred rows.
 - Schema bootstrap uses `create_all`; there are no migrations. The tables were verified on SQLite only (the Postgres JSONB variant comes from core's `JsonType`).
+
+## Automatic refresh
+
+The local scheduler calls `refresh_matches` every minute. It creates a new run only when company facts, confirmed owner conditions, active mandates, policy, or visible historical comparables change. A company is never matched to its own buyer mandate. Refreshing never sends outreach.

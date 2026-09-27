@@ -1,18 +1,10 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-import permetheus
-
-# ponytail: lets this worktree test against a separate core checkout; a no-op once deals.py lives in the package.
-_HERE = str(Path(__file__).resolve().parents[1] / "permetheus")
-if _HERE not in {str(Path(p).resolve()) for p in permetheus.__path__}:
-    permetheus.__path__.append(_HERE)
-
-from permetheus import deals, mail  # noqa: E402
+from permetheus import deals, mail
 from permetheus.app import create_app
 from permetheus.config import Settings
 from permetheus.deals import evaluate
@@ -267,6 +259,77 @@ def test_match_run_persists_results_and_opportunities(api):
     assert opp["status"] == "excluded" and not opp["stale"]  # kept with history, marked excluded
     assert ok(api.get(f"/api/match-runs/{run['id']}"))["counts"]["compatible"] == 1  # old snapshot intact
     assert len(ok(api.get(f"/api/match-runs?company_id={cid}"))) == 2
+
+
+def test_refresh_matches_only_creates_runs_for_changed_inputs(api):
+    cid = company(api)
+    buyer = mandate(api, "Buyer A")
+    sessionmaker = api.app.state.sessionmaker
+
+    assert deals.refresh_matches(sessionmaker) == 1
+    first = ok(api.get(f"/api/match-runs?company_id={cid}"))
+    assert len(first) == 1
+    assert deals.refresh_matches(sessionmaker) == 0
+    assert len(ok(api.get(f"/api/match-runs?company_id={cid}"))) == 1
+
+    sid = source(api, "https://example.org/new-financials")
+    financial = ok(api.post(f"/api/companies/{cid}/financials", json={
+        "source_id": sid, "metric": "ebitda", "amount": "2000000", "currency": "EUR",
+        "period_start": "2026-01-01", "period_end": NOW.date().isoformat(), "scope": "entity",
+        "status": "reported"}), 201)
+    review(api, "financials", financial["id"])
+    assert deals.refresh_matches(sessionmaker) == 1
+
+    ok(api.patch(f"/api/mandates/{buyer['id']}", json={"criteria": {"team_commitment": True}}))
+    assert deals.refresh_matches(sessionmaker) == 1
+    runs = ok(api.get(f"/api/match-runs?company_id={cid}"))
+    assert len(runs) == 3
+    assert len({run["snapshot_hash"] for run in runs}) == 3
+
+
+def test_match_runs_exclude_buyer_company_itself_manually_and_automatically(api):
+    buyer_company = company(api, "Buyer Legal Entity")
+    target_company = company(api, "Independent Target Oy")
+    buyer = mandate(api, "Buyer A", top={"buyer_company_id": buyer_company})
+
+    manual = api.post("/api/match-runs", json={"company_id": buyer_company, "mandate_ids": [buyer["id"]]})
+    assert manual.status_code == 409 and manual.json()["error"]["code"] == "no_active_mandates"
+
+    assert deals.refresh_matches(api.app.state.sessionmaker) == 1
+    assert ok(api.get(f"/api/match-runs?company_id={buyer_company}")) == []
+    [target_run] = ok(api.get(f"/api/match-runs?company_id={target_company}"))
+    assert [result["mandate_id"] for result in ok(api.get(f"/api/match-runs/{target_run['id']}"))["results"]] == [buyer["id"]]
+
+
+def test_proposed_facts_do_not_create_compatible_refresh_results(api):
+    cid = company(api, accept=False)
+    confirmed_profile(api, cid, [])
+    mandate(api, "Buyer A")
+
+    assert deals.refresh_matches(api.app.state.sessionmaker) == 1
+    [run] = ok(api.get(f"/api/match-runs?company_id={cid}"))
+    detail = ok(api.get(f"/api/match-runs/{run['id']}"))
+    [result] = detail["results"]
+    assert result["status"] == "research_needed"
+    assert {check["key"] for check in result["checks"] if check["result"] == "unknown"} >= {"industry", "revenue"}
+
+
+def test_refresh_matches_when_historical_comparables_change(api):
+    cid = company(api)
+    mandate(api, "Buyer A")
+    confirmed_profile(api, cid, [])
+    sessionmaker = api.app.state.sessionmaker
+
+    assert deals.refresh_matches(sessionmaker) == 1
+    [first] = ok(api.get(f"/api/match-runs?company_id={cid}"))
+    first_detail = ok(api.get(f"/api/match-runs/{first['id']}"))
+    assert first_detail["results"][0]["explanation"]["comparables"] == []
+
+    ok(api.post("/api/historical-deals", json={**DEAL, "buyer_name": "Buyer A"}), 201)
+    assert deals.refresh_matches(sessionmaker) == 1
+    latest = ok(api.get(f"/api/match-runs?company_id={cid}"))[0]
+    latest_detail = ok(api.get(f"/api/match-runs/{latest['id']}"))
+    assert len(latest_detail["results"][0]["explanation"]["comparables"]) == 1
 
 
 def test_match_run_requires_active_mandates(api):

@@ -23,7 +23,7 @@ from pydantic import (
 )
 from sqlalchemy import Date, ForeignKey, String, Text, UniqueConstraint, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from .auth import require_session
 from .db import get_db, get_or_404, record_activity
@@ -766,7 +766,8 @@ def mandate_snap(m: BuyerMandate) -> dict[str, Any]:
     return {**m.data, "id": str(m.id), "version": m.version}
 
 
-def select_mandates(db: Session, ids: list[uuid.UUID] | None) -> list[BuyerMandate]:
+def select_mandates(db: Session, ids: list[uuid.UUID] | None,
+                    target_company_id: uuid.UUID | None = None) -> list[BuyerMandate]:
     if ids:
         mandates = [get_or_404(db, BuyerMandate, i) for i in dict.fromkeys(ids)]
         inactive = [str(m.id) for m in mandates if not is_active(m)]
@@ -776,6 +777,8 @@ def select_mandates(db: Session, ids: list[uuid.UUID] | None) -> list[BuyerManda
     else:
         query = select(BuyerMandate).where(BuyerMandate.status == MandateStatus.active).order_by(BuyerMandate.created_at)
         mandates = [m for m in db.scalars(query) if is_active(m)]
+    if target_company_id is not None:
+        mandates = [m for m in mandates if str(m.data.get("buyer_company_id") or "") != str(target_company_id)]
     if not mandates:
         raise ApiError(409, "no_active_mandates", "No active, unexpired buyer mandates to compare against")
     return mandates
@@ -1160,7 +1163,7 @@ def hypothetical(key: str, value: Any) -> dict[str, Any]:
 def create_scenario(body: ScenarioIn, db: Session = Depends(get_db)):
     company = get_or_404(db, Company, body.company_id)
     profile = profile_snap(resolve_profile(db, company.id, body.profile_id, confirmed_only=False))
-    mandates = [mandate_snap(m) for m in select_mandates(db, body.mandate_ids)]
+    mandates = [mandate_snap(m) for m in select_mandates(db, body.mandate_ids, company.id)]
     base_conditions = profile["conditions"] if profile else []
     effective = {c["kind"]: c for c in base_conditions}
     for c in body.conditions:
@@ -1223,7 +1226,7 @@ def run_detail(db: Session, run: MatchRun) -> dict[str, Any]:
 def create_match_run(body: MatchRunIn, db: Session = Depends(get_db)):
     company = get_or_404(db, Company, body.company_id)
     profile = profile_snap(resolve_profile(db, company.id, body.profile_id, confirmed_only=True))
-    mandates = select_mandates(db, body.mandate_ids)
+    mandates = select_mandates(db, body.mandate_ids, company.id)
     facts, now = company_facts(db, company), utcnow()
     snaps = [mandate_snap(m) for m in mandates]
     snapshot = {"taken_at": now.isoformat(), "policy_version": POLICY_VERSION,
@@ -1247,6 +1250,39 @@ def create_match_run(body: MatchRunIn, db: Session = Depends(get_db)):
                     **run.counts)
     db.commit()
     return run_detail(db, run)
+
+
+def refresh_matches(sessionmaker: sessionmaker[Session]) -> int:
+    """Refresh company runs only when their accepted input or visible comparables changed."""
+    # ponytail: scans the personal workspace; use change-triggered jobs if it grows beyond a few hundred companies.
+    refreshed = 0
+    with sessionmaker() as db:
+        companies = db.scalars(select(Company).order_by(Company.id)).all()
+        for company in companies:
+            try:
+                mandates = select_mandates(db, None, company.id)
+            except ApiError as exc:
+                if exc.code == "no_active_mandates":
+                    continue
+                raise
+            profile = profile_snap(resolve_profile(db, company.id, None, confirmed_only=True))
+            facts = company_facts(db, company)
+            mandate_snaps = [mandate_snap(m) for m in mandates]
+            basis = {"policy_version": POLICY_VERSION, "company": {"id": str(company.id), "name": company.name},
+                     "facts": facts, "profile": profile, "mandates": mandate_snaps}
+            latest = db.scalar(select(MatchRun).where(MatchRun.company_id == company.id)
+                               .order_by(MatchRun.created_at.desc(), MatchRun.id.desc()).limit(1))
+            changed = latest is None or any(latest.snapshot.get(key) != value for key, value in basis.items())
+            if latest is not None and not changed:
+                saved = {str(result.mandate_id): result.explanation.get("comparables", [])
+                         for result in db.scalars(select(MatchResult).where(MatchResult.run_id == latest.id))}
+                now = utcnow()
+                current = {snap["id"]: comparables(db, snap, now) for snap in mandate_snaps}
+                changed = saved != current
+            if changed:
+                create_match_run(MatchRunIn(company_id=company.id), db)
+                refreshed += 1
+    return refreshed
 
 
 @router.get("/match-runs", response_model=list[MatchRunOut])

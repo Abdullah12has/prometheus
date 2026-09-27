@@ -8,7 +8,7 @@ from datetime import timedelta
 from sqlalchemy import select, update
 from starlette.requests import Request
 
-from . import documents, mail, notes, research, worker
+from . import deals, documents, mail, notes, research, worker
 from .models import Job, JobState, utcnow
 
 log = logging.getLogger('permetheus.background')
@@ -87,6 +87,7 @@ async def research_loop(app):
 
 
 def scheduled_cycle(app):
+    deals.refresh_matches(app.state.sessionmaker)
     with app.state.sessionmaker() as db:
         research.maybe_enqueue_scheduled_discovery(db)
     with app.state.sessionmaker() as db:

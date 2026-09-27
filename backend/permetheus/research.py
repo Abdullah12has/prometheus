@@ -1006,6 +1006,7 @@ def cancel_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
     run = _discovery_run_for(db, job)
     if run is not None and run.status == DiscoveryRunStatus.running:
         _finish_discovery(db, run, DiscoveryRunStatus.cancelled)
+    _set_media_job_state(db, job, "failed", "Processing cancelled; retry when ready")
     record_activity(db, "job.cancelled", "Job cancelled", job.company_id, job_id=str(job_id))
     db.commit()
     return job
@@ -1024,6 +1025,7 @@ def retry_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
     if run is not None and run.status != DiscoveryRunStatus.completed:
         run.status, run.finished_at = DiscoveryRunStatus.running, None
     now = utcnow()
+    _set_media_job_state(db, job, "queued", None)
     job.payload = {**(job.payload or {}), "retry_base": job.attempts}
     job.state, job.lease_until, job.available_at = JobState.queued, None, now
     job.last_error, job.updated_at = None, now
@@ -1031,3 +1033,40 @@ def retry_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
     db.commit()
     return job
 
+
+def _set_media_job_state(db: Session, job: Job, status: str, error: str | None) -> None:
+    """Keep the durable media row aligned with generic cancel/retry actions.
+
+    Transcripts, corrections, document findings, and review decisions remain
+    untouched; only worker lifecycle fields change. Import locally to keep the
+    research router independent of the media modules during startup.
+    """
+    payload = job.payload or {}
+    if job.kind == "note.transcribe":
+        value = payload.get("note_id")
+        try:
+            media_id = uuid.UUID(value) if isinstance(value, str) else None
+        except ValueError:
+            media_id = None
+        if media_id is None:
+            return
+        from .notes import Note
+        row = db.get(Note, media_id)
+        if row is not None and row.status != "completed":
+            row.status = status
+            row.progress = 0 if status == "queued" else row.progress
+            row.processing_error = error
+    elif job.kind == "document.extract":
+        value = payload.get("document_id")
+        try:
+            media_id = uuid.UUID(value) if isinstance(value, str) else None
+        except ValueError:
+            media_id = None
+        if media_id is None:
+            return
+        from .documents import Document
+        row = db.get(Document, media_id)
+        if row is not None and row.status != "completed":
+            row.status = status
+            row.progress = 0 if status == "queued" else row.progress
+            row.error = error

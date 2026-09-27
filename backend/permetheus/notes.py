@@ -131,7 +131,10 @@ def _blob_path(directory: Path, sequence: int, digest: str) -> Path:
     return path
 
 
-def _note_out(note: Note, chunks: list[NoteChunk] | None = None) -> dict[str, Any]:
+def _note_out(note: Note, chunks: list[NoteChunk] | None = None, db: Session | None = None) -> dict[str, Any]:
+    job_id = None
+    if db is not None:
+        job_id = db.scalar(select(Job.id).where(Job.idempotency_key == f"note.transcribe:{note.id}"))
     result = {
         "id": str(note.id),
         "title": note.title,
@@ -150,6 +153,7 @@ def _note_out(note: Note, chunks: list[NoteChunk] | None = None) -> dict[str, An
         "progress": note.progress,
         "processing_error": note.processing_error,
         "summary_warning": note.summary_warning,
+        "job_id": str(job_id) if job_id else None,
         "created_at": note.created_at.isoformat(),
         "updated_at": note.updated_at.isoformat(),
     }
@@ -171,13 +175,13 @@ def create_note(body: NoteCreate, request: Request, db: Session = Depends(get_db
     db.add(note)
     db.commit()
     _prepare_note_dir(_data_root(request), note.id)
-    return _note_out(note, [])
+    return _note_out(note, [], db)
 
 
 @router.get("/notes")
 def list_notes(limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)):
     notes = db.scalars(select(Note).order_by(Note.created_at.desc()).limit(limit)).all()
-    return [_note_out(note) for note in notes]
+    return [_note_out(note, db=db) for note in notes]
 
 
 @router.get("/notes/{note_id}")
@@ -186,7 +190,7 @@ def get_note(note_id: uuid.UUID, db: Session = Depends(get_db)):
     chunks = db.scalars(
         select(NoteChunk).where(NoteChunk.note_id == note_id).order_by(NoteChunk.sequence)
     ).all()
-    return _note_out(note, chunks)
+    return _note_out(note, chunks, db)
 
 
 @router.put("/notes/{note_id}/chunks/{sequence}")
@@ -303,7 +307,7 @@ def finalize_note(note_id: uuid.UUID, body: FinalizeIn, request: Request, db: Se
     if note is None:
         raise ApiError(404, "not_found", "Note not found")
     if note.status != "uploading":
-        return _note_out(note)
+        return _note_out(note, db=db)
     mime_type = body.mime_type.split(";", 1)[0].strip().lower()
     if mime_type not in MIME_EXTENSIONS:
         raise ApiError(415, "unsupported_media_type", "Unsupported audio type")
@@ -361,8 +365,8 @@ def finalize_note(note_id: uuid.UUID, body: FinalizeIn, request: Request, db: Se
     except IntegrityError:
         db.rollback()
         current = get_or_404(db, Note, note_id)
-        return _note_out(current)
-    return _note_out(note)
+        return _note_out(current, db=db)
+    return _note_out(note, db=db)
 
 
 @router.get("/notes/{note_id}/audio")
@@ -389,7 +393,7 @@ def patch_note(note_id: uuid.UUID, body: NotePatch, db: Session = Depends(get_db
         note.transcript_corrected = body.transcript_corrected
     note.updated_at = utcnow()
     db.commit()
-    return _note_out(note)
+    return _note_out(note, db=db)
 
 
 @router.delete("/notes/{note_id}", status_code=204)

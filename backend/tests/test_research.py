@@ -14,9 +14,11 @@ from permetheus import acquisition, research, worker
 from permetheus.app import create_app
 from permetheus.config import Settings
 from permetheus.db import init_db, make_sessionmaker
+from permetheus.documents import Document
 from permetheus.models import (
     Company, CompanyIdentifier, Evidence, FinancialObservation, Job, JobState, ReviewStatus, Source, SourceKind,
 )
+from permetheus.notes import Note
 from permetheus.research_models import (
     JOB_KIND_DISCOVERY, JOB_KIND_ENRICH, DiscoveryRun, DiscoveryRunStatus, ResearchRun, ResearchRunStatus,
 )
@@ -473,18 +475,54 @@ def test_coverage_labels_required_items_and_never_claims_completeness(api):
 def test_cancel_and_retry_work_for_media_jobs_without_duplicates(api):
     c, Session = api
     with Session() as db:
-        db.add(Job(kind="note.transcribe", idempotency_key="note.transcribe:n1", payload={"note_id": "n1"},
-                   state=JobState.failed, attempts=5, last_error="boom"))
-        db.add(Job(kind="document.extract", idempotency_key="document.extract:d1", payload={"document_id": "d1"}))
+        company = Company(name="Media test", name_normalized="media test")
+        db.add(company)
+        db.flush()
+        note = Note(title="Retryable note", company_id=company.id, status="processing", progress=42,
+                    transcript_raw="ASR text", transcript_corrected="Human correction",
+                    transcript_segments=[{"start_sec": 0, "end_sec": 1, "text": "ASR text"}])
+        source = Source(kind=SourceKind.document, url="local:test", title="Report", content_hash="a" * 64)
+        db.add_all((note, source))
+        db.flush()
+        document = Document(company_id=company.id, source_id=source.id, title="Report", media_type="application/pdf",
+                            artifact_path="documents/test.pdf", sha256="a" * 64, byte_size=10,
+                            status="processing", progress=35, result=[{"metric": "revenue"}], warning="kept")
+        db.add(document)
+        db.flush()
+        db.add(Job(kind="note.transcribe", idempotency_key=f"note.transcribe:{note.id}",
+                   payload={"note_id": str(note.id)}, company_id=company.id,
+                   state=JobState.running, attempts=5, last_error="boom"))
+        db.add(Job(kind="document.extract", idempotency_key=f"document.extract:{document.id}",
+                   payload={"document_id": str(document.id)}, company_id=company.id,
+                   state=JobState.running, attempts=2, last_error="boom"))
         db.commit()
-        note_id = db.scalar(select(Job.id).where(Job.kind == "note.transcribe"))
-        doc_id = db.scalar(select(Job.id).where(Job.kind == "document.extract"))
+        note_id, document_id = note.id, document.id
+        note_job_id = db.scalar(select(Job.id).where(Job.kind == "note.transcribe"))
+        doc_job_id = db.scalar(select(Job.id).where(Job.kind == "document.extract"))
 
-    r = c.post(f"/api/jobs/{note_id}/retry")
-    assert r.status_code == 200 and r.json()["state"] == "queued" and r.json()["attempts"] == 5
-    assert c.post(f"/api/jobs/{doc_id}/cancel").json()["state"] == "cancelled"
-    assert c.post(f"/api/jobs/{doc_id}/cancel").status_code == 409
-    assert c.post(f"/api/jobs/{doc_id}/retry").json()["state"] == "queued"
+    assert c.post(f"/api/jobs/{note_job_id}/cancel").json()["state"] == "cancelled"
+    cancelled_note = c.get(f"/api/notes/{note_id}").json()
+    assert cancelled_note["status"] == "failed"
+    assert cancelled_note["processing_error"] == "Processing cancelled; retry when ready"
+    assert cancelled_note["transcript_raw"] == "ASR text"
+    assert cancelled_note["transcript_corrected"] == "Human correction"
+    note_retry = c.post(f"/api/jobs/{note_job_id}/retry")
+    assert note_retry.status_code == 200 and note_retry.json()["state"] == "queued"
+    assert note_retry.json()["attempts"] == 5 and note_retry.json()["id"] == str(note_job_id)
+    queued_note = c.get(f"/api/notes/{note_id}").json()
+    assert queued_note["status"] == "queued" and queued_note["processing_error"] is None
+
+    assert c.post(f"/api/jobs/{doc_job_id}/cancel").json()["state"] == "cancelled"
+    cancelled_doc = c.get(f"/api/documents/{document_id}")
+    assert cancelled_doc.status_code == 200 and cancelled_doc.json()["status"] == "failed"
+    assert cancelled_doc.json()["error"] == "Processing cancelled; retry when ready"
+    assert c.post(f"/api/jobs/{doc_job_id}/cancel").status_code == 409
+    doc_retry = c.post(f"/api/jobs/{doc_job_id}/retry")
+    assert doc_retry.status_code == 200 and doc_retry.json()["state"] == "queued"
+    assert doc_retry.json()["id"] == str(doc_job_id)
+    queued_doc = c.get(f"/api/documents/{document_id}").json()
+    assert queued_doc["status"] == "queued" and queued_doc["error"] is None
+    assert queued_doc["result"] == [{"metric": "revenue"}] and queued_doc["warning"] == "kept"
     with Session() as db:
         assert db.scalar(select(func.count(Job.id))) == 2
-        assert db.get(Job, note_id).payload == {"note_id": "n1", "retry_base": 5}
+        assert db.get(Job, note_job_id).payload == {"note_id": str(note_id), "retry_base": 5}

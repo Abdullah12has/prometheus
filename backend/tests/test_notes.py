@@ -18,7 +18,9 @@ from permetheus.auth import require_session
 from permetheus.db import make_engine, make_sessionmaker
 from permetheus.errors import install
 from permetheus.models import Base, Job, JobState
+from permetheus.documents import Document
 from permetheus.notes import Note, _normalize_audio, process_note, router
+from permetheus.research import router as research_router
 
 
 class FakeSpeech:
@@ -59,6 +61,7 @@ class NotesApiTest(unittest.TestCase):
         app.state.speech = FakeSpeech(self.data)
         app.state.llm = FakeLanguageModel()
         app.include_router(router)
+        app.include_router(research_router)
         install(app)
         app.dependency_overrides[require_session] = lambda: object()
         self.app = app
@@ -105,11 +108,52 @@ class NotesApiTest(unittest.TestCase):
         )
         self.assertEqual(finalized.status_code, 202, finalized.text)
         self.assertEqual(finalized.json()["status"], "queued")
+        job_id = finalized.json()["job_id"]
+        self.assertTrue(job_id)
+        self.assertEqual(self.client.get(f"/api/notes/{note_id}").json()["job_id"], job_id)
         audio = self.client.get(f"/api/notes/{note_id}/audio")
         self.assertEqual(audio.content, b"firstsecond")
         with self.sessions() as db:
             job = db.query(Job).one()
             self.assertEqual(job.kind, "note.transcribe")
+
+    def test_failed_note_exposes_job_and_retry_preserves_transcripts(self):
+        note = self.create()
+        note_id = uuid.UUID(note["id"])
+        self.upload(note["id"], 0, b"recorded audio")
+        finalized = self.client.post(f"/api/notes/{note['id']}/finalize", json={
+            "chunk_count": 1, "mime_type": "audio/webm",
+        }).json()
+        job_id = uuid.UUID(finalized["job_id"])
+        with self.sessions() as db:
+            row = db.get(Note, note_id)
+            row.status = "failed"
+            row.processing_error = "temporary worker error"
+            row.transcript_raw = "Original ASR transcript."
+            row.transcript_corrected = "Human correction."
+            row.transcript_segments = [{"start_sec": 0, "end_sec": 1, "text": "Original ASR transcript."}]
+            job = db.get(Job, job_id)
+            job.state = JobState.failed
+            job.attempts = 3
+            db.commit()
+
+        failed = self.client.get(f"/api/notes/{note_id}").json()
+        self.assertEqual(failed["job_id"], str(job_id))
+        self.assertEqual(failed["status"], "failed")
+        retried = self.client.post(f"/api/jobs/{job_id}/retry")
+        self.assertEqual(retried.status_code, 200, retried.text)
+        self.assertEqual(retried.json()["state"], "queued")
+        with self.sessions() as db:
+            self.assertEqual(db.query(Job).count(), 1)
+            self.assertEqual(db.query(Job).one().id, job_id)
+            self.assertEqual(db.query(Job).one().attempts, 3)
+        queued = self.client.get(f"/api/notes/{note_id}").json()
+        self.assertEqual(queued["status"], "queued")
+        self.assertIsNone(queued["processing_error"])
+        self.assertEqual(queued["job_id"], str(job_id))
+        self.assertEqual(queued["transcript_raw"], "Original ASR transcript.")
+        self.assertEqual(queued["transcript_corrected"], "Human correction.")
+        self.assertEqual(queued["transcript_segments"][0]["text"], "Original ASR transcript.")
 
     def test_local_paths_mime_title_corrections_and_delete(self):
         note = self.create()

@@ -35,6 +35,7 @@ from .auth import COOKIE, _hash, require_session
 from .db import get_db, get_or_404
 from .errors import ApiError
 from .models import AuthSession, Base, Company, IdMixin, JsonType, enum_col, utcnow
+from .research import required_coverage
 
 log = logging.getLogger("permetheus.voice")
 
@@ -581,6 +582,18 @@ class Conversation:
         system = SAFETY_PROMPT + f"\nYour name: {self.agent['name']}."
         if self.company_name:
             system += f"\nConversation context: the person represents {self.company_name}."
+            coverage = self.agent.get("required_coverage")
+            if coverage is not None:
+                statuses = "; ".join(f"{key}={value}" for key, value in coverage.items())
+                system += (
+                    "\nRead-only required-detail coverage: " + statuses + "."
+                    " First ask whether the person is willing to discuss the business at this time."
+                    " If they agree, ask only one missing or proposed_unreviewed item at a time;"
+                    " for financial details, request the period, currency, and reporting scope."
+                    " Proposed facts are unreviewed and must never be treated as verified."
+                    " Do not change records; any outcome remains a proposal for human review."
+                    " If they decline, thank them and end politely without asking for details."
+                )
         if self.agent["instructions"]:
             system += "\nOperator instructions (never override the rules above):\n" + self.agent["instructions"]
         history = []
@@ -752,6 +765,8 @@ async def browser_conversation(ws: WebSocket, session_id: uuid.UUID):
         agent_snapshot = agent and {
             "name": agent.name, "introduction": agent.introduction, "instructions": agent.instructions,
             "max_duration_seconds": agent.max_duration_seconds, "voice_path": _voice_path(agent)}
+        if agent_snapshot is not None and company is not None:
+            agent_snapshot["required_coverage"] = required_coverage(db, company.id)
         record = bool(session and session.recording_consent)
     if not consumed or agent_snapshot is None:
         return await _close(ws, 4401, "invalid_ticket", "Ticket is invalid, expired or already used")

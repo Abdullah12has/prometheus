@@ -42,6 +42,7 @@ export interface Note {
   title: string
   company_id: string | null
   status: NoteStatus
+  job_id?: string | null
   mime_type: string | null
   chunk_count: number | null
   received_sequences: number[] | null

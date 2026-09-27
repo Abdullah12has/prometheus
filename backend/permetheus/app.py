@@ -27,12 +27,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             log.error("database bootstrap failed: %s", exc)
         tasks = background.start(app) if settings.worker_enabled else []
         app.state.background_tasks = tasks
-        yield
-        await background.stop(tasks)
-        await app.state.speech.close()
-        if getattr(app.state, "gmail_http", None) is not None:
-            app.state.gmail_http.close()
-        engine.dispose()
+        try:
+            yield
+        finally:
+            await background.stop(tasks)
+            await app.state.speech.close()
+            if getattr(app.state, "gmail_http", None) is not None:
+                app.state.gmail_http.close()
+            engine.dispose()
 
     app = FastAPI(title="Permetheus API", version="0.1.0", lifespan=lifespan,
                   openapi_url="/api/openapi.json", docs_url="/api/docs", redoc_url=None)

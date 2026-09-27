@@ -640,12 +640,20 @@ function NoteRow({
 
   useEffect(() => {
     if (!expanded || !POLLED_STATUSES.has(note.status)) return
-    pollRef.current = window.setTimeout(() => {
-      getNote(note.id)
-        .then(setNote)
-        .catch(() => undefined)
-    }, POLL_INTERVAL_MS)
+    let active = true
+    const poll = async () => {
+      try {
+        const updated = await getNote(note.id)
+        if (!active) return
+        setNote(updated)
+        if (POLLED_STATUSES.has(updated.status)) pollRef.current = window.setTimeout(() => void poll(), POLL_INTERVAL_MS)
+      } catch {
+        if (active) pollRef.current = window.setTimeout(() => void poll(), POLL_INTERVAL_MS)
+      }
+    }
+    pollRef.current = window.setTimeout(() => void poll(), POLL_INTERVAL_MS)
     return () => {
+      active = false
       if (pollRef.current !== undefined) window.clearTimeout(pollRef.current)
     }
   }, [expanded, note.status, note.id])
@@ -695,6 +703,7 @@ function NoteDetail({
   const [editingTitle, setEditingTitle] = useState(false)
   const [correctedDraft, setCorrectedDraft] = useState(note.transcript ?? note.transcript_raw ?? '')
   const [savingCorrection, setSavingCorrection] = useState(false)
+  const [retryingTranscription, setRetryingTranscription] = useState(false)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -763,6 +772,20 @@ function NoteDetail({
     }
   }
 
+  async function retryTranscription() {
+    if (!note.job_id || retryingTranscription) return
+    setRetryingTranscription(true)
+    try {
+      await api.post(`/api/jobs/${note.job_id}/retry`)
+      onNoteUpdated(await getNote(note.id))
+      push('Transcription queued for retry.', 'success')
+    } catch (cause) {
+      push(describeApiError(cause, 'Could not retry transcription.'), 'error')
+    } finally {
+      setRetryingTranscription(false)
+    }
+  }
+
   const correctionChanged = correctedDraft !== (note.transcript ?? note.transcript_raw ?? '')
 
   return (
@@ -800,6 +823,13 @@ function NoteDetail({
         <p className="field-error" role="alert">
           {note.processing_error}
         </p>
+      )}
+
+      {note.status === 'failed' && note.job_id && (
+        <button type="button" className="btn btn--secondary" onClick={() => void retryTranscription()} disabled={retryingTranscription}>
+          <RotateCcw size={14} aria-hidden="true" />
+          {retryingTranscription ? 'Queueing retry…' : 'Retry transcription'}
+        </button>
       )}
 
       {(note.status === 'queued' || note.status === 'processing') && (

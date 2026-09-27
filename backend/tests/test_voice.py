@@ -330,6 +330,11 @@ def test_full_turn_persists_transcript_and_never_touches_company(v):
     assert v.runtime.fed == 1600
     system = v.llm.calls[0][0]["content"]
     assert "never claim or imply to be human" in system and "Acme Oy" in system
+    assert "financial.revenue=missing" in system and "financial.ebitda=missing" in system
+    assert "financial.employees=missing" in system and "owner_intent=unconfirmed" in system
+    assert "First ask whether the person is willing" in system
+    assert "period, currency, and reporting scope" in system
+    assert "Proposed facts are unreviewed" in system and "Do not change records" in system
     detail = v.client.get(f"/api/voice/sessions/{s['session_id']}").json()
     assert detail["status"] == "ended" and detail["channel_label"] == "Browser conversation"
     assert [(t["role"], t["status"]) for t in detail["transcript"]] == [
@@ -354,6 +359,24 @@ def test_interrupt_clears_audio_and_marks_turn(v):
         assert not [m for m in after if m["type"] == "audio"]
     detail = v.client.get(f"/api/voice/sessions/{s['session_id']}").json()
     assert [(t["role"], t["status"]) for t in detail["transcript"]] == [("agent", "interrupted")]
+
+
+def test_unassociated_voice_session_gets_no_company_coverage_context(v):
+    s = start_session(v, make_agent(v)["id"])
+    with connect(v, s["session_id"]) as ws:
+        ws.send_json({"type": "auth", "ticket": s["ticket"]})
+        until(ws, "ready")
+        intro, _ = until(ws, "agent_done")
+        ws.send_json({"type": "playback_ack", "utterance_id": intro["utterance_id"]})
+        ws.send_bytes(pcm_frame())
+        ws.send_json({"type": "end_turn"})
+        until(ws, "final")
+        until(ws, "agent_done")
+        ws.send_json({"type": "stop"})
+        until(ws, "ended")
+    system = v.llm.calls[0][0]["content"]
+    assert "Conversation context:" not in system
+    assert "required-detail coverage" not in system
 
 
 def test_no_transcript_without_consent_and_asr_cancelled_on_stop(v):

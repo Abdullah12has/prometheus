@@ -155,3 +155,5 @@ actually heard.
 `proposed_outcome` is filled in after a recorded call if the person spoke:
 `{review_status: "proposed", source: "model", note, summary, stated_interest, follow_ups}`. It is
 never applied to company records: seller intent, emails and calls are left untouched.
+
+Associated company sessions snapshot required information coverage at connection time. The agent first asks whether the person is willing to discuss the business, then asks one missing or unreviewed item at a time. This context is read-only; conversation outcomes remain proposals.
