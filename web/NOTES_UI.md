@@ -5,6 +5,13 @@ Each three-second microphone chunk is written to IndexedDB before uploading.
 Files use byte slices smaller than the API's 8 MiB per-chunk limit. Captured chunks
 remain on the device until the API acknowledges finalization.
 
+The recorder stays mounted in the signed-in workspace. Switching Voice/Notes
+tabs or navigating to another section keeps capturing and uploading the same
+recording. A recording bar outside the Notes tab shows elapsed time and provides
+Open notes and Stop & upload controls. Signing out releases the microphone;
+closing or reloading the browser page still requires stopping or recovering the
+partial recording.
+
 After interruption, the operator can upload the remaining chunks and finalize
 an explicitly labelled partial recording, or discard it. A new microphone session
 never appends audio to an interrupted recording. The backend permits 4,802 upload

@@ -41,6 +41,7 @@ import {
 import { api } from '../lib/api'
 import { CompanyPicker } from './CompanyPicker'
 import { useToast } from '../lib/toast'
+import { Link } from '../lib/router'
 import {
   createNote,
   deleteNote,
@@ -107,10 +108,10 @@ class NotesErrorBoundary extends Component<{ children: ReactNode }, { error: Err
   }
 }
 
-export function NotesPanel() {
+export function NotesPanel({ active }: { active: boolean }) {
   return (
     <NotesErrorBoundary>
-      <NotesPanelInner />
+      <NotesPanelInner active={active} />
     </NotesErrorBoundary>
   )
 }
@@ -119,9 +120,9 @@ export function NotesPanel() {
 // Main panel.
 // ---------------------------------------------------------------------------
 
-type ComposerMode = 'idle' | 'recording' | 'uploading-file'
+type ComposerMode = 'idle' | 'starting' | 'recording' | 'finalizing' | 'uploading-file'
 
-function NotesPanelInner() {
+function NotesPanelInner({ active }: { active: boolean }) {
   const { push } = useToast()
 
   const [notes, setNotes] = useState<Note[] | null>(null)
@@ -141,6 +142,7 @@ function NotesPanelInner() {
   const [deleteTarget, setDeleteTarget] = useState<Note | null>(null)
 
   const controllerRef = useRef<MicRecordingController | null>(null)
+  const mountedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollTimerRef = useRef<number | undefined>(undefined)
 
@@ -159,13 +161,14 @@ function NotesPanelInner() {
   }, [])
 
   const loadSessions = useCallback(() => {
-    listSessions().then(setSessions).catch(() => setSessions([]))
+    listSessions().then(items => setSessions(items.filter(item => item.noteId !== controllerRef.current?.noteId))).catch(() => setSessions([]))
   }, [])
 
   useEffect(() => {
+    if (!active) return
     loadNotes()
     loadSessions()
-  }, [loadNotes, loadSessions])
+  }, [active, loadNotes, loadSessions])
 
   // Poll the list while any note is actively processing on the server.
   useEffect(() => {
@@ -177,22 +180,19 @@ function NotesPanelInner() {
     }
   }, [notes, loadNotes])
 
-  // Release the microphone and persist partial audio if this panel unmounts
-  // mid-recording (e.g. the user navigates to a different section).
+  // Navigation keeps this owner mounted. Signing out still releases the mic.
   useEffect(() => {
+    mountedRef.current = true
     return () => {
-      if (controllerRef.current) {
-        controllerRef.current.abortForUnmount()
-        push('Recording stopped because you left the notes panel. Recover it from the list below.', 'info')
-      }
+      mountedRef.current = false
+      controllerRef.current?.abortForUnmount()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Warn (browser-native) before a full page unload while recording.
   useEffect(() => {
     function onBeforeUnload(event: BeforeUnloadEvent) {
-      if (mode !== 'recording') return
+      if (mode === 'idle') return
       event.preventDefault()
       event.returnValue = ''
     }
@@ -201,6 +201,7 @@ function NotesPanelInner() {
   }, [mode])
 
   async function handleStartRecording() {
+    if (mode !== 'idle') return
     setComposerError(null)
     if (!title.trim()) {
       setComposerError('Give the recording a title before starting.')
@@ -212,15 +213,19 @@ function NotesPanelInner() {
       return
     }
     let stream: MediaStream
+    setMode('starting')
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (cause) {
       const info = describeMicError(cause)
       setComposerError(`${info.title}: ${info.message}`)
+      setMode('idle')
       return
     }
+    if (!mountedRef.current) { stream.getTracks().forEach(track => track.stop()); return }
     try {
       const note = await createNote(title.trim(), companyId || null)
+      if (!mountedRef.current) { stream.getTracks().forEach(track => track.stop()); return }
       setChunkStats({ persisted: 0, uploaded: 0, failed: 0 })
       setElapsedMs(0)
       controllerRef.current = startMicRecording(
@@ -236,7 +241,15 @@ function NotesPanelInner() {
             setComposerError(`Some audio failed to upload: ${message}`)
           },
           onStopped: (reason) => {
-            if (reason === 'max-duration') push('Recording stopped automatically at the 4-hour limit.', 'info')
+            if (reason === 'max-duration') {
+              push('Recording stopped automatically at the 4-hour limit.', 'info')
+              void handleStopRecording()
+            } else if (reason === 'error') {
+              controllerRef.current = null
+              setMode('idle')
+              setComposerError('The microphone stopped unexpectedly. Recover the captured audio below.')
+              loadSessions()
+            }
           },
         },
       )
@@ -244,13 +257,15 @@ function NotesPanelInner() {
     } catch (cause) {
       stream.getTracks().forEach((track) => track.stop())
       setComposerError(describeApiError(cause, 'Could not start the recording.'))
+      setMode('idle')
     }
   }
 
   async function handleStopRecording() {
     const controller = controllerRef.current
     if (!controller) return
-    setComposerError('Finishing upload…')
+    setMode('finalizing')
+    setComposerError(null)
     try {
       const result = await controller.stop()
       controllerRef.current = null
@@ -386,6 +401,23 @@ function NotesPanelInner() {
 
   const isBusy = mode !== 'idle'
 
+  if (!active) {
+    if (!isBusy && !composerError) return null
+    return <section className="notes-background" role="region" aria-label="Active note recording">
+      <div className="notes-background__status">
+        {mode === 'recording' ? <span className="notes-recording-dot" aria-hidden="true" /> : <FileAudio size={16} aria-hidden="true" />}
+        <strong>{mode === 'recording' ? 'Recording' : mode === 'starting' ? 'Starting recording…' : isBusy ? 'Saving audio…' : 'Notes need attention'}</strong>
+        <span>{title}</span>
+        {mode === 'recording' && <span className="mono">{formatElapsed(elapsedMs)}</span>}
+      </div>
+      <div className="notes-background__actions">
+        <Link to="/voice-notes?tab=notes" className="btn btn--secondary">Open notes</Link>
+        {mode === 'recording' && <button type="button" className="btn btn--primary" onClick={() => void handleStopRecording()}><Square size={14} aria-hidden="true" />Stop &amp; upload</button>}
+      </div>
+      {composerError && <p className="field-error" role="alert">{composerError}</p>}
+    </section>
+  }
+
   return (
     <div className="page notes-panel">
       <header className="page__header">
@@ -463,11 +495,11 @@ function NotesPanelInner() {
               Stop &amp; upload
             </button>
           </div>
-        ) : mode === 'uploading-file' ? (
+        ) : isBusy ? (
           <div className="notes-composer__recording" role="status">
             <Loader2 className="spin" size={16} aria-hidden="true" />
             <span className="muted small">
-              Uploading{fileProgress ? ` — part ${fileProgress.done}/${fileProgress.total}` : '…'}
+              {mode === 'starting' ? 'Starting recording…' : mode === 'finalizing' ? 'Finishing upload…' : `Uploading${fileProgress ? ` — part ${fileProgress.done}/${fileProgress.total}` : '…'}`}
             </span>
           </div>
         ) : (

@@ -12,9 +12,9 @@ function adminPassword(): string {
   return line?.slice('ADMIN_PASSWORD='.length).trim() ?? ''
 }
 
-test('records, uploads, lists and deletes a browser microphone note', async ({ page }) => {
+test('keeps recording across workspace tabs and navigation, then transcribes the complete note', async ({ page }) => {
   test.skip(process.env.RUN_NOTES_E2E !== '1', 'Explicit opt-in runs the authenticated local notes flow')
-  test.setTimeout(90_000)
+  test.setTimeout(150_000)
   const password = adminPassword()
   if (!password) throw new Error('Local operator password required')
 
@@ -29,10 +29,10 @@ test('records, uploads, lists and deletes a browser microphone note', async ({ p
         const buffer = await context.decodeAudioData(bytes.buffer)
         const source = context.createBufferSource()
         source.buffer = buffer
+        source.loop = true
         const destination = context.createMediaStreamDestination()
         source.connect(destination)
         source.start(context.currentTime + 3)
-        source.onended = () => setTimeout(() => void context.close(), 3000)
         return destination.stream
       }
     }, readFileSync(audioFixture).toString('base64'))
@@ -45,12 +45,32 @@ test('records, uploads, lists and deletes a browser microphone note', async ({ p
     const title = `Browser recording verification ${Date.now()}`
     await page.getByLabel('Title', { exact: true }).fill(title)
     const created = page.waitForResponse((response) => response.url().endsWith('/api/notes') && response.request().method() === 'POST')
+    const firstChunk = page.waitForResponse((response) => /\/api\/notes\/[^/]+\/chunks\/0$/.test(response.url()) && response.ok())
     await page.getByRole('button', { name: 'Record', exact: true }).click()
     noteId = (await (await created).json()).id
     await expect(page.getByRole('button', { name: 'Stop & upload' })).toBeVisible()
-    await page.waitForTimeout(10_000)
-    await page.getByRole('button', { name: 'Stop & upload' }).click()
+    await firstChunk
+    await page.getByRole('tab', { name: 'Voice agents', exact: true }).click()
+    // Sequence 1 can be the final flush from an aborted recorder. Sequence 2
+    // proves capture actually continues while the Notes tab is no longer open.
+    await page.waitForResponse((response) => response.url().endsWith(`/api/notes/${noteId}/chunks/2`) && response.ok(), { timeout: 12_000 })
+    const recording = page.getByRole('region', { name: 'Active note recording' })
+    await expect(recording).toContainText(title)
+    await page.getByRole('link', { name: 'Companies', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Companies', exact: true })).toBeVisible()
+    await page.waitForResponse((response) => response.url().endsWith(`/api/notes/${noteId}/chunks/3`) && response.ok(), { timeout: 8_000 })
+    await page.goBack()
+    await page.getByRole('tab', { name: 'Notes', exact: true }).click()
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title)
+    await expect(page.getByRole('button', { name: 'Stop & upload' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Interrupted recordings' }).filter({ hasText: title })).toHaveCount(0)
+    await page.getByRole('link', { name: 'Companies', exact: true }).click()
+    await page.screenshot({ path: '../data/screenshots/notes-recording-navigation.png' })
+    await recording.getByRole('button', { name: 'Stop & upload' }).click()
     await expect(page.getByText('Recording uploaded. Transcription is queued.')).toBeVisible({ timeout: 20_000 })
+    await expect(recording).toHaveCount(0)
+    await page.getByRole('link', { name: 'Voice & notes', exact: true }).click()
+    await page.getByRole('tab', { name: 'Notes', exact: true }).click()
     const row = page.locator('.notes-list__header').filter({ hasText: title })
     await expect(row).toBeVisible()
     await row.click()

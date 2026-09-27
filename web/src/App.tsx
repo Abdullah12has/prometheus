@@ -36,7 +36,7 @@ function RouteOutlet() {
     case 'matches':
       return <MatchesView />
     case 'voice-notes':
-      return <VoiceNotesView />
+      return null
     case 'settings':
       return <SettingsView />
     default:
@@ -46,6 +46,7 @@ function RouteOutlet() {
 
 function Shell() {
   const { status } = useAuth()
+  const [section] = useSegments()
   const [assistantOpen, setAssistantOpen] = useState(false)
 
   if (status === 'checking') {
@@ -64,6 +65,7 @@ function Shell() {
     <div className="app-shell">
       <Sidebar assistantOpen={assistantOpen} onToggleAssistant={() => setAssistantOpen((open) => !open)} />
       <main className="app-shell__content" id="main-content">
+        <VoiceNotesView active={section === 'voice-notes'} />
         <RouteOutlet />
       </main>
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
