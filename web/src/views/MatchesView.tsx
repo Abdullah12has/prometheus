@@ -25,7 +25,7 @@ import type { CompanyDetail, Contact } from '../lib/types'
 import { CompanyPicker } from '../components/CompanyPicker'
 import { LoadingBlock, ErrorBlock, EmptyState } from '../components/StateViews'
 import { useToast } from '../lib/toast'
-import { Link } from '../lib/router'
+import { Link, useRouter } from '../lib/router'
 import {
   BUYER_RESPONSE_LABELS, DISCLOSURE_FIELD_LABELS, MATCH_STATUS_LABELS, MILESTONE_LABELS,
   REASON_CATEGORY_LABELS, STRUCTURE_LABELS, formatDate, formatDateTime,
@@ -441,6 +441,8 @@ function MandateForm({ onSaved }: { onSaved: () => void }) {
 }
 
 function MandatesTab() {
+  const { search } = useRouter()
+  const requestedMandate = new URLSearchParams(search).get('mandate')
   const [mandates, setMandates] = useState<MandateOut[] | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -460,6 +462,7 @@ function MandatesTab() {
       })
   }
   useEffect(load, [activeOnly])
+  useEffect(() => { if (requestedMandate) openDetail(requestedMandate) }, [requestedMandate])
 
   function openDetail(id: string) {
     api.get<MandateDetail>(`/api/mandates/${id}`).then(setDetail).catch(() => setDetail(null))

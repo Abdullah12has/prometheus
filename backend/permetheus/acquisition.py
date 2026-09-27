@@ -38,6 +38,7 @@ import socket
 import ssl
 import threading
 import time
+import zlib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -420,6 +421,7 @@ def fetch_public_url(
     allowed_content_types: frozenset[str] = DEFAULT_ALLOWED_CONTENT_TYPES,
     overall_timeout: float = 30.0,
     allow_cross_host_redirects: bool = True,
+    before_redirect: Callable[[str], None] | None = None,
 ) -> FetchResult:
     """Fetch a public http(s) URL with SSRF, redirect, size, time and
     content-type bounds. Raises ``FetchError`` for any policy violation or
@@ -466,6 +468,9 @@ def fetch_public_url(
                     method,
                     target,
                     headers={
+                        # The pinned transport subclasses HTTPConnection even for TLS;
+                        # its automatic Host would append :443 and cause canonical redirect loops.
+                        "Host": f'[{host}]' if ':' in host else host,
                         "Accept-Encoding": "identity",
                         "User-Agent": USER_AGENT,
                         "Connection": "close",
@@ -476,7 +481,8 @@ def fetch_public_url(
                     content_type_header = response.getheader("Content-Type")
                     location = response.getheader("Location")
                     encodings = response.headers.get_all("Content-Encoding", [])
-                    if any(value.strip().lower() != "identity" for value in encodings):
+                    encoding = ','.join(encodings).strip().lower()
+                    if encoding not in ('', 'identity', 'gzip'):
                         raise FetchError("compressed_response_rejected")
                     declared = response.headers.get_all("Content-Length", [])
                     if len(declared) > 1 or (declared and not declared[0].isdigit()):
@@ -488,6 +494,16 @@ def fetch_public_url(
                         if method != "HEAD"
                         else (b"", False)
                     )
+                    if encoding == 'gzip' and method != 'HEAD':
+                        try:
+                            decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+                            body = decoder.decompress(body, max_bytes + 1)
+                        except zlib.error as exc:
+                            raise FetchError('invalid_compressed_response') from exc
+                        if truncated or len(body) > max_bytes or decoder.unconsumed_tail:
+                            raise FetchError('response_too_large')
+                        if not decoder.eof or decoder.unused_data:
+                            raise FetchError('invalid_compressed_response')
                     headers = {}
                     for name in ("Content-Type", "Content-Length", "Last-Modified", "ETag"):
                         value = response.getheader(name)
@@ -504,6 +520,8 @@ def fetch_public_url(
             current_url = urllib.parse.urljoin(current_url, location)
             if not allow_cross_host_redirects and _validate_url(current_url)[1] != origin_host:
                 raise FetchError("cross_host_redirect_blocked")
+            if before_redirect is not None:
+                before_redirect(current_url)
             redirect_chain.append(current_url)
             continue
 
@@ -571,6 +589,7 @@ class _PageExtractor(HTMLParser):
         self._text_parts: list[str] = []
         self._skip_depth = 0
         self._in_title = False
+        self._base_seen = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in self._SKIPPED_TAGS:
@@ -578,6 +597,14 @@ class _PageExtractor(HTMLParser):
             return
         if tag == "title":
             self._in_title = True
+            return
+        if tag == "base" and not self._base_seen:
+            href = dict(attrs).get("href")
+            if href:
+                base = urllib.parse.urljoin(self.base_url, href)
+                parsed = urllib.parse.urlsplit(base)
+                if parsed.scheme in ("http", "https") and parsed.hostname and not parsed.username and not parsed.password:
+                    self.base_url, self._base_seen = base, True
             return
         if tag == "a":
             href = dict(attrs).get("href")
@@ -683,8 +710,8 @@ def research_website(
     text_excerpt_limit: int = 4000,
     before_fetch: Callable[[], None] | None = None,
 ) -> WebsiteResearch:
-    """Bounded same-host crawl starting at ``url``. Obeys robots.txt, follows
-    only same-host links and same-host redirects, stops at ``max_pages``
+    """Bounded same-site crawl starting at ``url``. Obeys robots.txt, follows
+    same-host and www-alias redirects, stops at ``max_pages``
     fetched pages. Every email and phone number returned is *discovered*, not
     verified.
 
@@ -721,6 +748,21 @@ def research_website(
     external_links: set[str] = set()
     robots_disallowed: list[str] = []
     errors: list[str] = []
+    robots_by_origin = {scheme_host: (robots, None)}
+
+    def check_redirect(target: str) -> None:
+        parsed = urllib.parse.urlsplit(target)
+        if (parsed.hostname or '').lower().removeprefix('www.') != root_host.removeprefix('www.'):
+            raise FetchError('cross_host_redirect_blocked')
+        origin = f'{parsed.scheme}://{parsed.netloc}'
+        if origin not in robots_by_origin:
+            robots_by_origin[origin] = _load_robots(origin, timeout)
+        policy, problem = robots_by_origin[origin]
+        if policy is None:
+            raise FetchError(problem or 'robots_fetch_failed')
+        if not policy.can_fetch(USER_AGENT, target):
+            robots_disallowed.append(target)
+            raise FetchError('robots_disallowed_redirect')
 
     while queue and len(pages) < max_pages:
         page_url = queue.pop(0)
@@ -735,7 +777,8 @@ def research_website(
         if before_fetch is not None:
             before_fetch()
         try:
-            result = fetch_public_url(page_url, timeout=timeout, allow_cross_host_redirects=False)
+            check_redirect(page_url)
+            result = fetch_public_url(page_url, timeout=timeout, before_redirect=check_redirect)
         except FetchError as exc:
             errors.append(f"{page_url}: {exc}")
             pages.append(
@@ -793,7 +836,7 @@ def research_website(
             link_host = urllib.parse.urlsplit(link).hostname
             if not link_host:
                 continue
-            if link_host.lower() == root_host:
+            if link_host.lower().removeprefix('www.') == root_host.removeprefix('www.'):
                 internal_links.add(link)
                 if link not in seen and len(seen) + len(queue) < max_pages * 4:
                     queue.append(link)

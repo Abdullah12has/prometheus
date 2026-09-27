@@ -11,11 +11,12 @@ class ModelUnavailable(RuntimeError):
 
 
 class LanguageModel:
-    def __init__(self, base_url: str | None, api_key: str | None, model: str | None, reasoning_effort: str | None = None):
+    def __init__(self, base_url: str | None, api_key: str | None, model: str | None, reasoning_effort: str | None = None, *, chat_model: str | None = None):
         self.base_url = (base_url or '').rstrip('/')
         self.api_key = api_key
         self.model = model
         self.reasoning_effort = reasoning_effort
+        self.chat_model = chat_model or model
 
     @property
     def configured(self) -> bool:
@@ -24,13 +25,15 @@ class LanguageModel:
     def _request(self, messages: list[dict[str, Any]], **options: Any):
         if not self.configured:
             raise ModelUnavailable('Configure the language model in Settings first')
-        if self.reasoning_effort:
-            options['reasoning_effort'] = self.reasoning_effort
+        interactive = options.pop('interactive', False)
+        model = self.chat_model if interactive else self.model
+        if interactive or self.reasoning_effort:
+            options['reasoning_effort'] = 'none' if interactive else self.reasoning_effort
         endpoint = self.base_url + ('/chat/completions' if self.base_url.endswith('/v1') else '/v1/chat/completions')
-        return endpoint, {'Authorization': f'Bearer {self.api_key}'}, {'model': self.model, 'messages': messages, **options}
+        return endpoint, {'Authorization': f'Bearer {self.api_key}'}, {'model': model, 'messages': messages, **options}
 
-    async def complete(self, messages: list[dict[str, Any]], *, tools: list[dict] | None = None, max_tokens: int = 1800, json_mode: bool = False) -> dict:
-        options: dict[str, Any] = {'max_tokens': max_tokens}
+    async def complete(self, messages: list[dict[str, Any]], *, tools: list[dict] | None = None, max_tokens: int = 1800, json_mode: bool = False, interactive: bool = False) -> dict:
+        options: dict[str, Any] = {'max_tokens': max_tokens, 'interactive': interactive}
         if json_mode:
             options['response_format'] = {'type': 'json_object'}
         if tools:
@@ -44,8 +47,8 @@ class LanguageModel:
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
             raise ModelUnavailable('Language model request failed; verify the connection and retry') from exc
 
-    async def stream(self, messages: list[dict[str, Any]], *, max_tokens: int = 250) -> AsyncIterator[str]:
-        url, headers, body = self._request(messages, max_tokens=max_tokens, stream=True)
+    async def stream(self, messages: list[dict[str, Any]], *, max_tokens: int = 250, interactive: bool = False) -> AsyncIterator[str]:
+        url, headers, body = self._request(messages, max_tokens=max_tokens, stream=True, interactive=interactive)
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=10)) as client:
                 async with client.stream('POST', url, headers=headers, json=body) as response:

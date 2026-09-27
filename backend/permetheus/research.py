@@ -276,6 +276,9 @@ def _keep_pages(settings: Settings, f: Findings, crawl: acquisition.WebsiteResea
         f.blocked.append(f"robots_disallowed: {', '.join(crawl.robots_disallowed[:5])}")
     f.errors.extend(f"crawl_error: {e}" for e in crawl.errors)
     for page in crawl.pages:
+        if page.status != 200:
+            f.errors.append(f"crawl_error: page_fetch_failed: {page.error or f'HTTP {page.status}'}")
+            continue
         if page.error or not page.text_excerpt:
             continue
         host = (urllib.parse.urlsplit(page.url).hostname or "").removeprefix("www.")
@@ -283,16 +286,21 @@ def _keep_pages(settings: Settings, f: Findings, crawl: acquisition.WebsiteResea
         _keep(settings, f, kind, page.url, page.title, page.fetched_at, page.text_excerpt, identifies)
 
 
-def _search(target: Target, f: Findings, settings: Settings, beat: Callable[[], None]) -> None:
+def _search(target: Target, f: Findings, settings: Settings, beat: Callable[[], None],
+            progress: Callable[[str, str, int | None, int | None], None] | None = None) -> None:
     """Always search the web, even when a website is known: the company's own
     site rarely carries financials. Fetch at most ``SEARCH_FETCH_RESULTS``
     results that mention the target, each through the robots-aware,
     SSRF-safe crawler limited to that one page."""
     if not settings.searxng_url:
         f.missing.append("web_search_not_configured")
+        if progress:
+            progress("search", "Web search is not configured", None, None)
         return
     f.checked.append("web_search")
     query = " ".join(p for p in (f'"{target.name}"', target.business_id) if p)
+    if progress:
+        progress("search", "Searching the configured web engine", None, None)
     search = acquisition.search_web(query, settings.searxng_url)
     if search.degraded:
         f.errors.append(f"web_search_degraded: {search.error}")
@@ -301,15 +309,23 @@ def _search(target: Target, f: Findings, settings: Settings, beat: Callable[[], 
               if r.url not in already and _mentions_target(f"{r.title} {r.content or ''} {r.url}", target)]
     if not picked:
         f.missing.append("no_relevant_search_results")
-    for item in picked[:SEARCH_FETCH_RESULTS]:
+    selected = picked[:SEARCH_FETCH_RESULTS]
+    if progress:
+        progress("search", f"Found {len(picked)} relevant result(s); checking {len(selected)}", 0, len(selected))
+    for index, item in enumerate(selected, start=1):
+        if progress:
+            host = urllib.parse.urlsplit(item.url).hostname or "public source"
+            progress("search", f"Checking result {index} of {len(selected)}: {host}", index, len(selected))
         beat()
         try:
             crawl = acquisition.research_website(item.url, max_pages=1, text_excerpt_limit=WEBSITE_CRAWL_TEXT_LIMIT,
                                                  before_fetch=beat)
         except ValueError:
             f.blocked.append(f"search_result_unfetchable: {item.url}")
-            continue
-        _keep_pages(settings, f, crawl, SourceKind.search_result, target, own_site=False)
+        else:
+            _keep_pages(settings, f, crawl, SourceKind.search_result, target, own_site=False)
+        if progress:
+            progress("search", f"Checked relevant search result {index} of {len(selected)}", index, len(selected))
     for item in picked[SEARCH_FETCH_RESULTS:]:
         f.recommendations.append(f"review_search_result: {item.url}")
 
@@ -357,15 +373,20 @@ def extraction_batches(fetched: list[Fetched], limit: int = EXTRACTION_BATCH_CHA
     return batches
 
 
-def _gather(target: Target, f: Findings, llm: LanguageModel, settings: Settings, beat: Callable[[], None]) -> None:
+def _gather(target: Target, f: Findings, llm: LanguageModel, settings: Settings, beat: Callable[[], None],
+            progress: Callable[[str, str, int | None, int | None], None] | None = None) -> None:
     if target.country in (None, "FI"):
         f.checked.append("registry")
+        if progress:
+            progress("registry", "Checking the Finnish company register", None, None)
         registry = resolve_registry(target.name, target.business_id)
     else:
         # A Finnish registry name match would be a different company.
         registry = RegistryResolution("skipped")
         f.missing.append(f"registry_lookup_not_available: PRH covers Finland only; {target.country} identity "
                          "comes from its registry import evidence")
+        if progress:
+            progress("registry", "Registry lookup is unavailable for this country", None, None)
     if registry.status == "skipped":
         pass
     elif registry.status == "resolved" and registry.record is not None:
@@ -386,27 +407,38 @@ def _gather(target: Target, f: Findings, llm: LanguageModel, settings: Settings,
         f.missing.append("registry_record_not_found")
     else:
         f.errors.append(f"registry_lookup_failed: {registry.reason}")
+    if progress:
+        progress("registry", "Registry check finished", None, None)
     beat()
 
     if target.website:
         f.checked.append("website")
+        if progress:
+            progress("website", "Crawling the company website", None, None)
         crawl = acquisition.research_website(target.website, max_pages=WEBSITE_CRAWL_MAX_PAGES,
                                              text_excerpt_limit=WEBSITE_CRAWL_TEXT_LIMIT, before_fetch=beat)
         if crawl.pages_fetched == 0:
             f.missing.append("website_unreachable")
         _keep_pages(settings, f, crawl, SourceKind.website, target, own_site=True)
         f.contacts = crawl.contacts
+        if progress:
+            progress("website", f"Website crawl finished: {len(crawl.pages)} page(s) checked", None, None)
     else:
         f.missing.append("no_website_on_file")
+        if progress:
+            progress("website", "No company website is on file", None, None)
     beat()
 
-    _search(target, f, settings, beat)
+    _search(target, f, settings, beat, progress)
     beat()
 
     if f.fetched and llm.configured:
         f.checked.append("llm_extraction")
         instruction = extraction_instruction(target)
-        for batch in extraction_batches(f.fetched):
+        batches = extraction_batches(f.fetched)
+        for index, batch in enumerate(batches, start=1):
+            if progress:
+                progress("extraction", f"Extracting from batch {index} of {len(batches)}", index, len(batches))
             beat()
             try:
                 payload = asyncio.run(llm.extract(batch, instruction))
@@ -417,6 +449,8 @@ def _gather(target: Target, f: Findings, llm: LanguageModel, settings: Settings,
             f.financials.extend(x for x in payload.get("financials") or [] if isinstance(x, dict))
     elif f.fetched:
         f.missing.append("llm_not_configured")
+        if progress:
+            progress("extraction", "Language model is not configured", None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -587,6 +621,42 @@ def _write_ledger(run: ResearchRun, f: Findings, status: ResearchRunStatus) -> N
     run.errors, run.recommendations = list(f.errors), list(f.recommendations)
 
 
+def _set_job_progress(db: Session, *, job_id: uuid.UUID, fencing: int, run_id: uuid.UUID, f: Findings,
+                      phase: str, detail: str, current: int | None = None, total: int | None = None,
+                      reset: bool = False, source_count: int | None = None) -> None:
+    """Stage safe progress in the current transaction; caller fences and commits it."""
+    states = (JobState.running, JobState.cancelled) if phase == "cancelled" else (JobState.running,)
+    previous = db.scalar(select(Job.payload).where(
+        Job.id == job_id, Job.attempts == fencing, Job.state.in_(states)))
+    if previous is None:
+        _fence(db, job_id, fencing, finish=JobState.cancelled if phase == "cancelled" else None)
+        raise LeaseLost(f"job {job_id} progress no longer belongs to attempt {fencing}")
+    payload = dict(previous or {})
+    prior_progress = payload.get("progress") if isinstance(payload.get("progress"), dict) else {}
+    events = [] if reset else list(prior_progress.get("events") or [])
+    now = utcnow().isoformat()
+    safe_detail = detail[:240]
+    events.append({"phase": phase, "detail": safe_detail, "at": now})
+    progress: dict[str, Any] = {
+        "phase": phase, "detail": safe_detail, "updated_at": now,
+        "source_count": len(f.fetched) if source_count is None else source_count,
+        "events": events[-24:],
+    }
+    if current is not None:
+        progress["current"] = max(0, current)
+    if total is not None:
+        progress["total"] = max(0, total)
+    payload["progress"] = progress
+    changed = db.execute(update(Job).where(
+        Job.id == job_id, Job.attempts == fencing, Job.state.in_(states)).values(payload=payload))
+    if changed.rowcount != 1:
+        _fence(db, job_id, fencing, finish=JobState.cancelled if phase == "cancelled" else None)
+    run = db.get(ResearchRun, run_id)
+    if run is not None and run.attempt == fencing:
+        run.checked, run.missing, run.blocked = list(f.checked), list(f.missing), list(f.blocked)
+        run.errors, run.recommendations = list(f.errors), list(f.recommendations)
+
+
 def _commit_results(db: Session, *, job: Job, fencing: int, run_id: uuid.UUID, f: Findings) -> None:
     company = db.get(Company, job.company_id)
     run = db.get(ResearchRun, run_id)
@@ -610,6 +680,10 @@ def _commit_results(db: Session, *, job: Job, fencing: int, run_id: uuid.UUID, f
         record_activity(db, "research.completed", f"Enrichment run completed for {company.name}", company.id,
                         checked=f.checked, missing=f.missing, blocked=f.blocked)
         _write_ledger(run, f, ResearchRunStatus.completed)
+        _set_job_progress(db, job_id=job.id, fencing=fencing, run_id=run_id, f=f, phase="completed",
+                          detail=f"Saved {len(sources)} sources. {len(f.missing)} information gaps remain; "
+                                 "review the evidence and coverage below.",
+                          source_count=len(sources))
     _fence(db, job.id, fencing, finish=JobState.succeeded)
     db.commit()
 
@@ -619,6 +693,9 @@ def _close_run(db: Session, *, job: Job, fencing: int, run_id: uuid.UUID, f: Fin
     run = db.get(ResearchRun, run_id)
     if run is not None:
         _write_ledger(run, f, status)
+    phase = "cancelled" if status == ResearchRunStatus.cancelled else "failed"
+    _set_job_progress(db, job_id=job.id, fencing=fencing, run_id=run_id, f=f, phase=phase,
+                      detail=f"Research {phase} after checking {len(f.fetched)} source(s).")
     _fence(db, job.id, fencing, finish=finish)
     db.commit()
 
@@ -663,8 +740,19 @@ def run_enrich(db: Session, *, job: Job, fencing: int, llm: LanguageModel, setti
     run_id = run.id
 
     f = Findings()
+
+    def report_progress(phase: str, detail: str, current: int | None = None, total: int | None = None,
+                        *, reset: bool = False) -> None:
+        _set_job_progress(db, job_id=job.id, fencing=fencing, run_id=run_id, f=f, phase=phase, detail=detail,
+                          current=current, total=total, reset=reset)
+        _fence(db, job.id, fencing, renew=True)
+        db.commit()
+
     try:
-        _gather(target, f, llm, settings, _heartbeat(db, job.id, fencing))
+        report_progress("registry", "Starting company research", reset=True)
+        _gather(target, f, llm, settings, _heartbeat(db, job.id, fencing), report_progress)
+        report_progress("saving", f"Saving {len(f.fetched)} source(s), {len(f.facts)} fact(s) and "
+                        f"{len(f.financials)} financial record(s)")
         _commit_results(db, job=job, fencing=fencing, run_id=run_id, f=f)
     except JobCancelled:
         db.rollback()
@@ -1052,7 +1140,10 @@ def retry_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
         run.status, run.finished_at = DiscoveryRunStatus.running, None
     now = utcnow()
     _set_media_job_state(db, job, "queued", None)
-    job.payload = {**(job.payload or {}), "retry_base": job.attempts}
+    payload = dict(job.payload or {})
+    if job.kind == JOB_KIND_ENRICH:
+        payload.pop("progress", None)
+    job.payload = {**payload, "retry_base": job.attempts}
     job.state, job.lease_until, job.available_at = JobState.queued, None, now
     job.last_error, job.updated_at = None, now
     record_activity(db, "job.retried", "Job retried", job.company_id, job_id=str(job_id))

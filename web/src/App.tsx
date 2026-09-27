@@ -9,6 +9,8 @@ import { LoginView } from './views/LoginView'
 import { OverviewView } from './views/OverviewView'
 import { CompaniesView } from './views/CompaniesView'
 import { CompanyDetailView } from './views/CompanyDetailView'
+import { BuyersView } from './views/BuyersView'
+import { BuyerDetailView } from './views/BuyerDetailView'
 import { OutreachView } from './views/OutreachView'
 import { FuturesView } from './views/FuturesView'
 import { MatchesView } from './views/MatchesView'
@@ -25,6 +27,8 @@ function RouteOutlet() {
       return <OverviewView />
     case 'companies':
       return rest[0] ? <CompanyDetailView id={rest[0]} /> : <CompaniesView />
+    case 'buyers':
+      return rest[0] ? <BuyerDetailView id={rest[0]} /> : <BuyersView />
     case 'outreach':
       return <OutreachView />
     case 'futures':

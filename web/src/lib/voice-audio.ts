@@ -11,6 +11,7 @@ export class VoiceAudio {
   private processor: AudioWorkletNode | null = null
   private mute: GainNode | null = null
   private currentUtterance: string | null = null
+  private cleared = new Set<string>()
   private buffers = new Map<number, AudioBuffer>()
   private sources = new Set<AudioBufferSourceNode>()
   private expectedSeq = 0
@@ -49,7 +50,7 @@ export class VoiceAudio {
 
   enqueue(id: string, seq: number, rate: number, base64: string) {
     const context = this.context
-    if (!context) return
+    if (!context || this.cleared.has(id)) return
     if (id !== this.currentUtterance) {
       this.flush()
       this.currentUtterance = id
@@ -73,7 +74,12 @@ export class VoiceAudio {
     this.ackIfPlayed()
   }
 
+  interrupt() {
+    if (this.currentUtterance) this.clear(this.currentUtterance)
+  }
+
   clear(id: string) {
+    this.cleared.add(id)
     if (id !== this.currentUtterance) return
     this.flush()
     this.currentUtterance = null
@@ -90,12 +96,15 @@ export class VoiceAudio {
       source.connect(context.destination)
       source.onended = () => {
         this.sources.delete(source)
+        source.disconnect()
+        if (this.sources.size === 0) this.processor?.port.postMessage({ playing: false })
         this.ackIfPlayed()
       }
       const when = Math.max(this.nextTime, context.currentTime + 0.02)
       source.start(when)
       this.nextTime = when + buffer.duration
       this.sources.add(source)
+      this.processor?.port.postMessage({ playing: true })
     }
   }
 
@@ -115,11 +124,13 @@ export class VoiceAudio {
       source.disconnect()
     }
     this.sources.clear()
+    this.processor?.port.postMessage({ playing: false })
     this.done = false
   }
 
   async stop() {
     this.captureGeneration++
+    this.cleared.clear()
     this.flush()
     this.currentUtterance = null
     this.processor?.port.close()

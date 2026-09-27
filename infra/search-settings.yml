@@ -6,3 +6,13 @@ search:
   formats:
     - html
     - json
+# Keep general search usable when other providers return quota/CAPTCHA errors.
+engines:
+  - name: yahoo
+    disabled: false
+  - name: brave
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: google cse
+    disabled: true

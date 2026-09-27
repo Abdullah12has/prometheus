@@ -482,6 +482,7 @@ class Conversation:
         self.turns: list[dict] = []
         self.current: dict | None = None
         self.reply_task: asyncio.Task | None = None
+        self.reply_tasks: set[asyncio.Task] = set()
         self.asr_id: str | None = None
         self.turn_samples = 0
 
@@ -629,7 +630,7 @@ class Conversation:
 
     async def generate(self):
         buffer, total = "", 0
-        async for token in self.llm.stream(self.messages(), max_tokens=160):
+        async for token in self.llm.stream(self.messages(), max_tokens=160, interactive=True):
             buffer += token
             *sentences, buffer = SENTENCE_END.split(buffer)
             for sentence in sentences:
@@ -652,11 +653,13 @@ class Conversation:
         self.turns.append(turn)
         self.current = turn
         self.reply_task = asyncio.create_task(self.reply(turn, sentences))
+        self.reply_tasks.add(self.reply_task)
+        self.reply_task.add_done_callback(self.reply_tasks.discard)
 
     async def reply(self, turn: dict, sentences) -> None:
         seq = 0
         try:
-            async with contextlib.aclosing(sentences):
+            async with asyncio.timeout(45), contextlib.aclosing(sentences):
                 async for sentence in sentences:
                     turn["text"] = f"{turn['text']} {sentence}".strip()
                     await self.send(type="agent_text", utterance_id=turn["id"], text=sentence)
@@ -692,6 +695,10 @@ class Conversation:
         turn["status"] = "interrupted" if turn["audio_sent"] else "unplayed"
         if task is not None and not task.done() and not turn["in_tts"]:
             task.cancel()  # safe outside synthesis (e.g. waiting on the language model)
+        elif task is not None and not task.done():
+            # Let a short synthesis finish to retain the warm worker, but never queue behind a stuck one.
+            timer = asyncio.get_running_loop().call_later(2, task.cancel)
+            task.add_done_callback(lambda _: timer.cancel())
         return turn
 
     async def interrupt(self) -> None:
@@ -707,16 +714,13 @@ class Conversation:
                 self.persist()
 
     async def stop_reply(self) -> None:
-        turn, task = self.current, self.reply_task
-        if turn is not None and turn["status"] == "speaking":
-            turn["status"] = "interrupted" if turn["audio_sent"] else "unplayed"
-        if task is not None and not task.done():
-            if not turn["in_tts"]:
-                task.cancel()
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(asyncio.shield(task), 15)
+        for turn in self.turns:
+            if turn["status"] == "speaking":
+                turn["status"] = "interrupted" if turn["audio_sent"] else "unplayed"
+        tasks = list(self.reply_tasks)
+        for task in tasks:
             task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
         for t in self.turns:
             if t["status"] == "awaiting_playback":
                 t["status"] = "unconfirmed"  # audio sent, playback never acknowledged

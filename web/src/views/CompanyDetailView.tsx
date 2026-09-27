@@ -28,12 +28,13 @@ export function CompanyDetailView({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>('Overview')
   const { push } = useToast()
 
-  const load = useCallback(() => {
-    setStatus('loading'); setError(null)
+  const load = useCallback((quiet = false) => {
+    if (!quiet) setStatus('loading'); setError(null)
     api.get<CompanyDetail>(`/api/companies/${id}`).then((result) => { setCompany(result); setStatus('ready') })
       .catch((cause) => { setError(message(cause, 'Could not load this company.')); setStatus('error') })
   }, [id])
   useEffect(() => { load() }, [load])
+  const refreshCompany = useCallback(() => load(true), [load])
 
   function startEditing() {
     if (!company) return
@@ -98,7 +99,7 @@ export function CompanyDetailView({ id }: { id: string }) {
           <section className="panel"><h2>Company overview</h2>{company.description ? <p className="detail-description">{company.description}</p> : <p className="muted">No description recorded.</p>}<dl className="detail-grid"><div><dt>Business IDs</dt><dd>{company.identifiers.length ? company.identifiers.map((item) => `${item.jurisdiction} ${item.value}`).join(', ') : 'Not recorded'}</dd></div><div><dt>Registry status</dt><dd>{company.registry_status ?? 'Not recorded'}</dd></div></dl>
             {company.status !== 'confirmed' && <form className="identity-form" onSubmit={(e) => submit(e, async (data) => { if (data.confirm_identity !== 'on') throw new Error('Confirm the legal identity checkbox first'); await api.patch(`/api/companies/${id}`, { status: 'confirmed', confirmation_basis: data.basis }) }, 'Company identity confirmed')}><label className="checkbox-label"><input name="confirm_identity" type="checkbox" required /> I verified this is the correct legal entity</label><label htmlFor="identity-basis">Evidence basis</label><textarea id="identity-basis" name="basis" required minLength={5} placeholder="Registry entry, jurisdiction, or other basis" /><button className="btn btn--secondary" disabled={saving}>Confirm identity</button></form>}
           </section>
-          <ResearchPanel companyId={id} onUpdated={load} />
+          <ResearchPanel companyId={id} onUpdated={refreshCompany} />
           <section className="panel"><h2>Confirm owner statement</h2><p className="muted small">Seller intent changes only when an attributable statement is confirmed.</p><details><summary>Record a statement</summary><form className="stack-form" onSubmit={(e) => submit(e, (d) => api.post(`/api/companies/${id}/intent-statements`, { speaker_name: d.speaker_name, speaker_authority: d.speaker_authority, stance: d.stance, statement: d.statement, stated_at: new Date(String(d.stated_at)).toISOString(), confirmed: d.confirmed === 'on' }), 'Intent statement recorded')}>
             <label htmlFor="speaker-name">Speaker name</label><input id="speaker-name" name="speaker_name" required /><label htmlFor="speaker-authority">Authority</label><select id="speaker-authority" name="speaker_authority"><option value="owner">Owner</option><option value="authorized_representative">Authorized representative</option><option value="unverified">Unverified</option></select><label htmlFor="statement-stance">Stance</label><select id="statement-stance" name="stance">{SELLER_INTENT_OPTIONS.filter((x) => x !== 'unknown').map((x) => <option key={x} value={x}>{x.replace('_', ' ')}</option>)}</select><label htmlFor="stated-at">When</label><input id="stated-at" name="stated_at" type="datetime-local" required /><label htmlFor="statement">Exact quote</label><textarea id="statement" name="statement" rows={3} required /><label className="checkbox-label"><input name="confirmed" type="checkbox" /> Confirm attributable owner statement</label><button className="btn btn--primary" disabled={saving}>{saving ? 'Recording…' : 'Record statement'}</button></form></details>
             {company.intent_statements.map((item) => <div className="record-list__item" key={item.id}><strong>{item.speaker_name}</strong><span className="muted small">{item.stance.replace('_', ' ')} · {item.confirmed ? 'confirmed' : 'unconfirmed'}</span><p>“{item.statement}”</p></div>)}

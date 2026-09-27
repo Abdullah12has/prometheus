@@ -4,6 +4,7 @@ network I/O would show up as a lock) with every network seam faked."""
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from threading import Event, Thread
 
 import pytest
 from fastapi.testclient import TestClient
@@ -220,30 +221,106 @@ def test_cancel_mid_crawl_marks_run_cancelled_and_stops_fetching(env, monkeypatc
         run = db.scalar(select(ResearchRun).where(ResearchRun.company_id == company_id))
         assert run.status == ResearchRunStatus.cancelled and run.attempt == fencing
         assert run.checked == ["registry", "website"]
-        assert db.get(Job, job.id).state == JobState.cancelled
+        cancelled_job = db.get(Job, job.id)
+        assert cancelled_job.state == JobState.cancelled
+        assert cancelled_job.payload["progress"]["phase"] == "cancelled"
+        assert all(event["phase"] != "completed" for event in cancelled_job.payload["progress"]["events"])
         assert db.scalar(select(func.count(Source.id))) == 0
+
+
+def test_job_api_exposes_live_progress_before_gather_returns(api, monkeypatch, tmp_path):
+    client, Session = api
+    Net(monkeypatch)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    entered, release = Event(), Event()
+
+    def blocked_crawl(url, max_pages=5, *, timeout=10.0, text_excerpt_limit=4000, before_fetch=None):
+        if before_fetch:
+            before_fetch()
+        entered.set()
+        assert release.wait(5), "test did not release blocked website fetch"
+        return crawl(url, [page(url, "Acme Oy builds boats.")])
+
+    monkeypatch.setattr(acquisition, "research_website", blocked_crawl)
+    failures = []
+
+    settings = Settings(_env_file=None, database_url="sqlite://", root_dir=tmp_path, searxng_url=SEARX)
+
+    def run():
+        try:
+            enrich(Session, settings, FakeLLM(), job, fencing)
+        except Exception as exc:  # asserted in the test thread after it joins
+            failures.append(exc)
+
+    thread = Thread(target=run)
+    thread.start()
+    try:
+        assert entered.wait(5), "enrichment did not reach the website fetch"
+        body = client.get("/api/jobs", params={"company_id": str(company_id)}).json()
+        active = next(item for item in body if item["id"] == str(job.id))
+        progress = active["progress"]
+        assert progress["phase"] == "website"
+        assert progress["detail"] == "Crawling the company website"
+        assert progress["source_count"] == 0
+        assert progress["events"][-1]["phase"] == "website"
+    finally:
+        release.set()
+        thread.join(5)
+
+    assert not thread.is_alive()
+    assert failures == []
+    completed = next(item for item in client.get("/api/jobs", params={"company_id": str(company_id)}).json()
+                     if item["id"] == str(job.id))["progress"]
+    assert completed["phase"] == "completed" and completed["source_count"] == 1
+    assert {event["phase"] for event in completed["events"]} >= {
+        "registry", "website", "search", "extraction", "saving", "completed",
+    }
+
+
+def test_retry_clears_old_enrichment_progress(api):
+    client, Session = api
+    company_id = seed(Session)
+    with Session() as db:
+        job = db.scalar(select(Job).where(Job.company_id == company_id))
+        job.state = JobState.failed
+        job.payload = {**job.payload, "progress": {"phase": "failed", "events": []}}
+        db.commit()
+        job_id = job.id
+
+    retried = client.post(f"/api/jobs/{job_id}/retry")
+
+    assert retried.status_code == 200
+    assert retried.json()["state"] == "queued" and retried.json()["progress"] is None
 
 
 def test_reclaimed_attempt_cannot_commit_and_its_run_is_superseded(env, monkeypatch):
     Session, settings = env
     net = Net(monkeypatch, site_text=REVENUE_QUOTE)
+    original = net.research_website
     company_id = seed(Session)
     job, fencing = claim(Session)
-    original = net.research_website
-
     def slow_crawl(url, *a, before_fetch=None, **kw):
         # while attempt 1 is fetching, its lease expires and attempt 2 takes over
         with Session() as db:
             db.get(Job, job.id).lease_until = datetime.now(timezone.utc) - timedelta(seconds=1)
             db.commit()
             assert worker.claim_job(db)[1] == fencing + 1
-        return original(url, *a, before_fetch=before_fetch, **kw)
+            newer = db.get(Job, job.id)
+            payload = dict(newer.payload)
+            payload["progress"] = {"phase": "registry", "detail": "new attempt owns progress",
+                                   "updated_at": NOW, "source_count": 0, "events": []}
+            newer.payload = payload
+            db.commit()
+        # Simulate a slow origin that returns without invoking the old attempt's heartbeat.
+        return crawl(url, [page(url, REVENUE_QUOTE)])
 
     monkeypatch.setattr(acquisition, "research_website", slow_crawl)
     with pytest.raises(research.LeaseLost):
         enrich(Session, settings, FakeLLM(REVENUE), job, fencing)
     with Session() as db:
         assert db.scalar(select(func.count(Source.id))) == 0
+        assert db.get(Job, job.id).payload["progress"]["detail"] == "new attempt owns progress"
         stale = db.scalar(select(ResearchRun).where(ResearchRun.attempt == fencing))
         assert stale.status == ResearchRunStatus.running  # nothing written by the stale attempt
         research.cancel_job(job.id, db)  # cancels the current attempt only; it has no run yet
@@ -257,6 +334,18 @@ def test_reclaimed_attempt_cannot_commit_and_its_run_is_superseded(env, monkeypa
     with Session() as db:
         runs = {r.attempt: r.status for r in db.scalars(select(ResearchRun).where(ResearchRun.company_id == company_id))}
         assert runs == {fencing: ResearchRunStatus.failed, fencing2: ResearchRunStatus.completed}
+
+
+def test_non_200_html_is_not_kept_as_research_evidence(env):
+    _, settings = env
+    target = research.Target("Acme Oy", None, "acme.fi", "https://acme.fi", "FI")
+    f = research.Findings()
+    bad = acquisition.PageResult("https://acme.fi", 503, "Error", "Acme Oy revenue was EUR 1,000.", [], None, NOW)
+
+    research._keep_pages(settings, f, crawl("https://acme.fi", [bad]), SourceKind.website, target, own_site=True)
+
+    assert f.fetched == []
+    assert any("HTTP 503" in error for error in f.errors)
 
 
 def test_results_commit_with_job_success_and_reruns_do_not_duplicate_or_touch_reviewed(env, monkeypatch):

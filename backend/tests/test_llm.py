@@ -55,3 +55,15 @@ def test_extraction_requests_complete_json_without_thinking(monkeypatch):
     monkeypatch.setattr(httpx, 'AsyncClient', lambda **kwargs: client_type(transport=httpx.MockTransport(respond), **kwargs))
     result = asyncio.run(LanguageModel('https://model.example', 'fixture', 'fast', 'none').extract('Source text', 'Extract sourced facts'))
     assert result == {'facts': [], 'financials': []}
+
+
+def test_interactive_calls_disable_reasoning_and_use_chat_model(monkeypatch):
+    seen = []
+    def respond(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+    client_type = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: client_type(transport=httpx.MockTransport(respond), **kwargs))
+    model = LanguageModel("https://model.example", "fixture", "research", "high", chat_model="fast")
+    asyncio.run(model.complete([], interactive=True))
+    assert seen[0]["model"] == "fast" and seen[0]["reasoning_effort"] == "none"

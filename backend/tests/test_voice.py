@@ -72,7 +72,7 @@ class FakeLLM:
         self.tokens = ["Thanks for your time. ", "I'm an AI assistant", ", how can I help?"]
         self.calls = []
 
-    async def stream(self, messages, max_tokens=250):
+    async def stream(self, messages, max_tokens=250, **options):
         self.calls.append(messages)
         for token in self.tokens:
             await asyncio.sleep(0)
@@ -446,3 +446,30 @@ def test_no_transcript_without_consent_and_asr_cancelled_on_stop(v):
     assert detail["transcript"] == [] and detail["proposed_outcome"] is None
     with v.client.app.state.sessionmaker() as db:
         assert db.get(voice_mod.VoiceSession, uuid.UUID(detail["id"])).transcript == []
+
+
+def test_replaced_synthesis_tasks_are_cleaned_up_on_stop():
+    async def check():
+        entered = asyncio.Event()
+        stopped = asyncio.Event()
+        class Runtime:
+            async def tts_stream(self, *args):
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                    yield 24000, b'\x00\x00'
+                finally:
+                    stopped.set()
+        class Socket:
+            async def send_json(self, value):
+                pass
+        conversation = voice_mod.Conversation(Socket(), Runtime(), None, None, uuid.uuid4(), {'voice_path': None}, None, False)
+        conversation.start_reply(conversation.fixed('First'))
+        await entered.wait()
+        first = conversation.reply_task
+        await conversation.interrupt()
+        conversation.start_reply(conversation.fixed('Second'))
+        await asyncio.sleep(0)
+        await asyncio.wait_for(conversation.stop_reply(), 2)
+        assert first.done() and stopped.is_set()
+    asyncio.run(check())

@@ -87,3 +87,25 @@
 .discovery-advanced .discovery-runs > .registry-operation__heading h3 { margin: 0; font-size: 13px; }
 @media (max-width: 940px) { .registry-countries { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .registry-countries { grid-template-columns: 1fr; } .registry-source { min-height: 0; } .registry-country__count { font-size: 19px; } }
+
+
+.enrichment-activity { padding: 18px; border: 1px solid var(--color-navy-border); border-radius: 12px; background: var(--color-workspace); }
+.enrichment-activity__heading { display: flex; align-items: center; gap: 9px; }
+.enrichment-activity__heading strong { font-size: 14px; }
+.enrichment-activity__heading > span { margin-left: auto; font-size: 12px; color: var(--color-navy-muted); }
+.enrichment-activity__current { margin: 12px 0 18px; line-height: 1.5; font-size: 13px; overflow-wrap: anywhere; }
+.enrichment-stages { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.enrichment-stages li { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-navy-muted); }
+.enrichment-stages li > span { display: grid; place-items: center; flex: 0 0 20px; height: 20px; border-radius: 50%; border: 1px solid var(--color-navy-border); font-size: 10px; }
+.enrichment-stages .is-current { color: var(--color-navy); font-weight: 600; }
+.enrichment-stages .is-current > span { background: var(--color-navy); border-color: var(--color-navy); color: white; }
+.enrichment-stages .is-done > span { color: var(--color-teal); border-color: var(--color-teal); }
+.enrichment-events { list-style: none; padding: 12px 0 0; margin: 16px 0 0; max-height: 190px; overflow: auto; border-top: 1px solid var(--color-navy-border); display: grid; gap: 8px; }
+.enrichment-events li { display: flex; gap: 12px; font-size: 11.5px; line-height: 1.4; }
+.enrichment-events time { flex: 0 0 82px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--color-navy-muted); }
+.enrichment-events span { overflow-wrap: anywhere; }
+.research-details > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.enrichment-spinner { animation: enrichment-spin 1s linear infinite; }
+@keyframes enrichment-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .enrichment-spinner { animation: none; } }
+@media (max-width: 680px) { .enrichment-stages { grid-template-columns: 1fr; gap: 7px; } .enrichment-activity__heading { flex-wrap: wrap; } .enrichment-activity__heading > span { margin-left: 0; } }

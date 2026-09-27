@@ -8,7 +8,7 @@ from datetime import timedelta
 from sqlalchemy import select, update
 from starlette.requests import Request
 
-from . import deals, documents, mail, notes, registry, research, worker
+from . import buyers, deals, documents, mail, notes, registry, research, worker
 from .models import Job, JobState, utcnow
 
 log = logging.getLogger('permetheus.background')
@@ -97,6 +97,17 @@ async def registry_loop(app):
         await asyncio.sleep(5)
 
 
+async def buyer_loop(app):
+    # Own loop: buyer discovery/research must not wait behind bulk seller enrichment.
+    while True:
+        try:
+            if await asyncio.to_thread(buyers.process_one, app.state.sessionmaker, app.state.llm, app.state.settings):
+                continue
+        except Exception:
+            log.exception('Buyer queue unavailable')
+        await asyncio.sleep(3)
+
+
 async def enrichment_feeder_loop(app):
     while True:
         try:
@@ -138,7 +149,7 @@ def start(app):
     registry.STOP.clear()
     # Two researchers share the local search/model budget; one import lane per country.
     loops = (research_loop, research_loop, media_loop, scheduled_loop,
-             registry_loop, registry_loop, registry_loop, enrichment_feeder_loop)
+             registry_loop, registry_loop, registry_loop, enrichment_feeder_loop, buyer_loop, buyer_loop)
     return [asyncio.create_task(loop(app)) for loop in loops]
 
 

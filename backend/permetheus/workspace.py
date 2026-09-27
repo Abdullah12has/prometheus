@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasPath, BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ class JobOut(BaseModel):
     state: JobState
     company_id: uuid.UUID | None
     attempts: int
+    progress: dict[str, Any] | None = Field(default=None, validation_alias=AliasPath("payload", "progress"))
     available_at: datetime
     last_error: str | None
     created_at: datetime

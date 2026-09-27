@@ -18,7 +18,7 @@ import logging
 import time
 from datetime import timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from . import research
@@ -80,7 +80,8 @@ def claim_job(db: Session, *, kinds: tuple[str, ...] = HANDLED_KINDS, now=None) 
                 | ((Job.state == JobState.running) & Job.lease_until.is_not(None) & (Job.lease_until < now))
             ),
         )
-        .order_by(Job.available_at)
+        # Interactive work should start at the next free slot ahead of bulk population.
+        .order_by(case((Job.payload['campaign_id'].as_string().is_not(None), 1), else_=0), Job.available_at)
         .limit(1)
     )
     if db.get_bind().dialect.name != "sqlite":
@@ -102,6 +103,9 @@ def claim_job(db: Session, *, kinds: tuple[str, ...] = HANDLED_KINDS, now=None) 
         elif job.kind == "registry.import":
             from . import registry  # registry imports worker; resolve lazily
             registry.mark_abandoned(db, job)
+        elif job.kind.startswith("buyer."):
+            from . import buyers  # buyers imports worker; resolve lazily
+            buyers.mark_abandoned(db, job)
         return None
 
     new_attempts = prior_attempts + 1

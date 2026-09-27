@@ -1,0 +1,450 @@
+[
+  {
+    "name": "Kirk Kapital",
+    "website": "https://kirkkapital.dk/",
+    "country": "DK",
+    "kind": "family_office",
+    "source_url": "https://kirkkapital.dk/",
+    "source_note": "Official site says it manages and grows family-owned capital and takes strategic minority ownership in Scandinavian B2B companies; portfolio and active partnership described."
+  },
+  {
+    "name": "Axcel",
+    "website": "https://axcel.com/",
+    "country": "DK",
+    "kind": "private_equity",
+    "source_url": "https://axcel.com/about/",
+    "source_note": "Official page identifies Axcel as a Nordic private-equity firm and lists current portfolio companies and platform investments; Copenhagen address is listed."
+  },
+  {
+    "name": "Polaris",
+    "website": "https://polarisequity.dk/",
+    "country": "DK",
+    "kind": "private_equity",
+    "source_url": "https://polarisequity.dk/",
+    "source_note": "Official page says Polaris invests in majority equity positions and other investments in Nordic mid-sized companies; Copenhagen address is listed."
+  },
+  {
+    "name": "VIA equity",
+    "website": "https://viaequity.com/",
+    "country": "DK",
+    "kind": "private_equity",
+    "source_url": "https://viaequity.com/about/",
+    "source_note": "Official page describes a Copenhagen-founded private-equity firm that invests in and actively develops Northern European software and IT companies."
+  },
+  {
+    "name": "Capidea",
+    "website": "https://capidea.dk/en/",
+    "country": "DK",
+    "kind": "private_equity",
+    "source_url": "https://capidea.dk/en/",
+    "source_note": "Official site identifies Capidea as a private-equity fund and shows operating portfolio-company investments."
+  },
+  {
+    "name": "GRO Capital",
+    "website": "https://www.grocapital.dk/",
+    "country": "DK",
+    "kind": "private_equity",
+    "source_url": "https://www.grocapital.dk/",
+    "source_note": "Official site says GRO invests flexibly as a minority or majority partner in advanced B2B software companies; it is headquartered in Copenhagen."
+  },
+  {
+    "name": "Thominvest",
+    "website": "https://thominvest.fi/",
+    "country": "FI",
+    "kind": "holding_company",
+    "source_url": "https://thominvest.fi/",
+    "source_note": "Official site identifies Thominvest as a Helsinki-based family-owned investment company with a direct investment approach focused on building businesses."
+  },
+  {
+    "name": "Hartwall Capital",
+    "website": "https://hartwallcapital.fi/",
+    "country": "FI",
+    "kind": "holding_company",
+    "source_url": "https://hartwallcapital.fi/",
+    "source_note": "Official site describes a Finnish family-owned investment company, its portfolio holdings, and active ownership of Nordic companies."
+  },
+  {
+    "name": "Besodos Investors",
+    "website": "https://www.besodos.fi/en/",
+    "country": "FI",
+    "kind": "holding_company",
+    "source_url": "https://www.besodos.fi/en/",
+    "source_note": "Official page identifies a family-owned investment company and lists direct investments in Finnish operating companies, with an active-investor approach."
+  },
+  {
+    "name": "Aspira",
+    "website": "https://aspira.fi/",
+    "country": "FI",
+    "kind": "family_office",
+    "source_url": "https://aspira.fi/",
+    "source_note": "Official page says Aspira is a family office that may make direct investments into growth companies; it also discloses that most investments are in PE funds, so direct activity is not its only strategy."
+  },
+  {
+    "name": "CapMan",
+    "website": "https://capman.com/",
+    "country": "FI",
+    "kind": "private_equity",
+    "source_url": "https://capman.com/investments/growth/",
+    "source_note": "Official page says CapMan Growth invests in and actively develops Nordic growth companies; CapMan is Helsinki-listed and operates private-equity strategies."
+  },
+  {
+    "name": "Intera Partners",
+    "website": "https://interapartners.fi/",
+    "country": "FI",
+    "kind": "private_equity",
+    "source_url": "https://interapartners.fi/wp-content/uploads/2017/04/Sijoitusammattilainen_2017_final.pdf",
+    "source_note": "Official Intera document describes a Finnish growth-equity investor taking ownership stakes in Finnish and Swedish companies and developing its portfolio with management. Evidence document is dated 2017; recheck current mandate before matching."
+  },
+  {
+    "name": "Eyrir Invest",
+    "website": "https://eyrir.is/",
+    "country": "IS",
+    "kind": "family_office",
+    "source_url": "https://eyrir.is/mission-and-strategy/",
+    "source_note": "Official page identifies Eyrir as an international investment company following a buy-and-build strategy and investing directly in a small number of companies; company also self-identifies as a family office."
+  },
+  {
+    "name": "Alfa Framtak",
+    "website": "https://www.alfaframtak.com/",
+    "country": "IS",
+    "kind": "private_equity",
+    "source_url": "https://www.alfaframtak.com/why-we-are-here",
+    "source_note": "Official page describes investments in Icelandic businesses and active ownership across traditional private equity, growth capital, and special situations."
+  },
+  {
+    "name": "Aars",
+    "website": "https://aars.no/en/",
+    "country": "NO",
+    "kind": "family_office",
+    "source_url": "https://aars.no/en/about-aars",
+    "source_note": "Official page says Aars is a family office and investment company with direct-investment holdings and long-term active ownership across Nordic businesses."
+  },
+  {
+    "name": "Ferd",
+    "website": "https://ferd.no/en/",
+    "country": "NO",
+    "kind": "family_office",
+    "source_url": "https://ferd.no/en/capital/what-we-do/",
+    "source_note": "Official page describes direct equity investments in private companies and active ownership; Ferd identifies itself as a family-owned investment company."
+  },
+  {
+    "name": "Silversky Group",
+    "website": "https://www.silversky.no/",
+    "country": "NO",
+    "kind": "family_office",
+    "source_url": "https://www.silversky.no/",
+    "source_note": "Official page describes a family-owned private investment office making direct investments, co-investments, and club deals; it publishes a portfolio."
+  },
+  {
+    "name": "Joya",
+    "website": "https://joya.no/",
+    "country": "NO",
+    "kind": "family_office",
+    "source_url": "https://joya.no/",
+    "source_note": "Official page identifies Joya as an Oslo-based family office investing across public and private markets and lists companies where its capital is invested."
+  },
+  {
+    "name": "Investinor",
+    "website": "https://investinor.no/en/",
+    "country": "NO",
+    "kind": "private_equity",
+    "source_url": "https://investinor.no/en/direct-investments/",
+    "source_note": "Official mandate says Investinor directly invests in growth companies alongside private investors and exercises active ownership. State-owned investor, not a family office."
+  },
+  {
+    "name": "Norvestor",
+    "website": "https://norvestor.com/",
+    "country": "NO",
+    "kind": "private_equity",
+    "source_url": "https://norvestor.com/approach",
+    "source_note": "Official page describes Norvestor’s direct investments and active ownership in mid-sized Nordic businesses; it has an Oslo office."
+  },
+  {
+    "name": "FAM",
+    "website": "https://fam.se/en/",
+    "country": "SE",
+    "kind": "holding_company",
+    "source_url": "https://fam.se/en/about-us",
+    "source_note": "Official page says FAM is a privately owned holding company owned by Wallenberg foundations and an active long-term owner of portfolio companies."
+  },
+  {
+    "name": "Kinnevik",
+    "website": "https://www.kinnevik.com/",
+    "country": "SE",
+    "kind": "holding_company",
+    "source_url": "https://www.kinnevik.com/",
+    "source_note": "Official site identifies Kinnevik as a growth investor and active owner investing in technology-enabled companies; its Stockholm address is listed."
+  },
+  {
+    "name": "Lundbergföretagen",
+    "website": "https://www.lundbergforetagen.se/en",
+    "country": "SE",
+    "kind": "holding_company",
+    "source_url": "https://www.lundbergforetagen.se/en",
+    "source_note": "Official page describes Lundbergs as an investment company investing in and actively developing its portfolio businesses and real estate over the long term."
+  },
+  {
+    "name": "EQT",
+    "website": "https://eqtgroup.com/",
+    "country": "SE",
+    "kind": "private_equity",
+    "source_url": "https://eqtgroup.com/private-capital/eqt-private-equity",
+    "source_note": "Official page describes EQT Private Equity’s direct investments in companies; EQT lists its Stockholm office and current company portfolio."
+  },
+  {
+    "name": "Stena Sessan",
+    "website": "https://stenasessan.se/en/",
+    "country": "SE",
+    "kind": "holding_company",
+    "source_url": "https://stenasessan.se/en/portfolio-companies/",
+    "source_note": "Official site describes a flexible, long-term investment strategy and active co-ownership in portfolio companies; Stockholm office listed."
+  },
+  {
+    "name": "Investor AB",
+    "website": "https://www.investorab.com/",
+    "country": "SE",
+    "kind": "holding_company",
+    "source_url": "https://www.investorab.com/",
+    "source_note": "Official site says Investor was founded by the Wallenberg family and supports its global portfolio companies through long-term ownership and board participation; Stockholm office listed."
+  },
+  {
+    "name": "Altor",
+    "website": "https://altor.com/",
+    "country": "SE",
+    "kind": "private_equity",
+    "source_url": "https://altor.com/app/uploads/2022/08/altor-sustainability-2021-final.pdf",
+    "source_note": "Official Altor report describes private-equity investments in private and public companies and lists Stockholm among its Nordic offices; country is based on documented Stockholm office, not exclusive Swedish focus."
+  },
+  {
+    "name": "Jacobs Capital",
+    "website": "https://jacobsholding.com/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://jacobsholding.com/investment-focus/",
+    "source_note": "Investment page says it targets control or co-control investments in private companies and other businesses; its about page documents Zurich roots and Jacobs-family capital."
+  },
+  {
+    "name": "Partners Group",
+    "website": "https://www.partnersgroup.com/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://www.partnersgroup.com/news-and-views/press-releases/investment-news/detail?news_id=80e9420b-67c0-43f1-b298-e0dfa2aba73e",
+    "source_note": "Official release says Partners Group agreed to acquire a majority stake in AVK Power Solutions and plans a direct equity investment of over USD 1 billion on behalf of clients."
+  },
+  {
+    "name": "Capvis",
+    "website": "https://www.capvis.com/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://www.capvis.com/en/news/capvis-invests-into-leading-digital-transformation-and-it-strategy-consultancy-adex-partners.html?file=files%2Fredakteur%2FNews%2Fenglisch%2Fcapvis-adex-press-release-en.pdf",
+    "source_note": "Official transaction release identifies Capvis as a Swiss private equity investor that primarily acquires majority stakes in mid-sized companies; it describes its investment in AdEx Partners."
+  },
+  {
+    "name": "Ufenau Capital Partners",
+    "website": "https://ucp.ch/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://ucp.ch/en/portfolio/",
+    "source_note": "Official current and realized portfolio page documents company investments and buy-and-build ownership; the firm describes majority investments and direct company development."
+  },
+  {
+    "name": "Verium",
+    "website": "https://verium.ch/en/",
+    "country": "CH",
+    "kind": "family_office",
+    "source_url": "https://verium.ch/en/direct-investments/",
+    "source_note": "Official page identifies Verium as an active direct investor that invests its own capital in DACH companies through majority or significant minority stakes, and lists operating portfolio companies."
+  },
+  {
+    "name": "EGS Beteiligungen AG",
+    "website": "https://www.egs-beteiligungen.ch/en",
+    "country": "CH",
+    "kind": "holding_company",
+    "source_url": "https://www.egs-beteiligungen.ch/en",
+    "source_note": "Official site says EGSB is wholly owned by the Ernst Göhner Foundation and invests foundation assets in Swiss-related companies; it lists an operating-company portfolio."
+  },
+  {
+    "name": "Invision",
+    "website": "https://www.invision.ch/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://www.invision.ch/losungen/unser-fokus/",
+    "source_note": "Official investment-focus page describes succession solutions, MBO/MBI financing, active minority positions, growth financing, and its portfolio of operating businesses."
+  },
+  {
+    "name": "CGS Management",
+    "website": "https://www.cgs-management.com/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://www.cgs-management.com/en/investors",
+    "source_note": "Official investor page says CGS invests in small and medium-sized companies in Germany, Austria and Switzerland and develops them through industrial buy-and-build; it gives the Swiss address."
+  },
+  {
+    "name": "Helvetica Capital",
+    "website": "https://helvetica-capital.ch/en/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://helvetica-capital.ch/en/portfolio",
+    "source_note": "Official portfolio page says it takes majority stakes in established Swiss industrial companies, assumes ownership responsibility, and lists active portfolio businesses."
+  },
+  {
+    "name": "Franz Haniel & Cie.",
+    "website": "https://www.haniel.de/en/",
+    "country": "DE",
+    "kind": "holding_company",
+    "source_url": "https://www.haniel.de/en/investments/",
+    "source_note": "Official site describes Haniel as a long-term family-owned investor, focuses on majority stakes, and lists direct portfolio companies and acquisition history."
+  },
+  {
+    "name": "Deutsche Beteiligungs AG (DBAG)",
+    "website": "https://www.dbag.de/",
+    "country": "DE",
+    "kind": "private_equity",
+    "source_url": "https://www.dbag.de/unternehmen/fonds/dbag-fund-viii/",
+    "source_note": "Official fund page says DBAG Fund VIII invests directly in equity of mid-sized companies and lists current portfolio companies; DBAG also commits its own capital."
+  },
+  {
+    "name": "Mutares SE & Co. KGaA",
+    "website": "https://mutares.com/en/",
+    "country": "DE",
+    "kind": "holding_company",
+    "source_url": "https://mutares.com/en/company/",
+    "source_note": "Official company page says Mutares acquires portfolio companies, supports their operational transformation and value creation; its portfolio page lists operating businesses."
+  },
+  {
+    "name": "AUCTUS Capital Partners",
+    "website": "https://auctus.com/en/",
+    "country": "DE",
+    "kind": "private_equity",
+    "source_url": "https://auctus.com/en/investments/",
+    "source_note": "Official investments page lists active portfolio companies and describes AUCTUS as having made over 470 company investments, with active buy-and-build ownership."
+  },
+  {
+    "name": "Deutsche Private Equity (DPE)",
+    "website": "https://www.dpe.de/en/",
+    "country": "DE",
+    "kind": "private_equity",
+    "source_url": "https://www.dpe.de/en/",
+    "source_note": "Official site says DPE funds invest in mid-sized growth companies as majority and minority shareholders and lists active portfolio companies and recent acquisitions."
+  },
+  {
+    "name": "Paragon Partners",
+    "website": "https://www.paragon.de/en/",
+    "country": "DE",
+    "kind": "private_equity",
+    "source_url": "https://www.paragon.de/en/",
+    "source_note": "Official site says it invests in established mid-sized companies, supports them as an active shareholder, and lists 14 portfolio companies."
+  },
+  {
+    "name": "Maxburg Capital Partners",
+    "website": "https://maxburg.com/",
+    "country": "DE",
+    "kind": "private_equity",
+    "source_url": "https://maxburg.com/portfolio/",
+    "source_note": "Official portfolio page lists active operating-company investments and describes ownership transactions, including acquiring shares from previous owners alongside management."
+  },
+  {
+    "name": "AURELIUS",
+    "website": "https://www.aurelius-group.com/",
+    "country": "DE",
+    "kind": "private_equity",
+    "source_url": "https://www.aurelius-group.com/investments",
+    "source_note": "Official site describes AURELIUS's private equity platforms and hands-on operational support for investments; it publishes a portfolio of operating companies."
+  },
+  {
+    "name": "BU Bregal Unternehmerkapital",
+    "website": "https://www.bu-partners.de/",
+    "country": "DE",
+    "kind": "private_equity",
+    "source_url": "https://www.bu-partners.de/beteiligungen/proalpha/",
+    "source_note": "Official BU portfolio page identifies proALPHA as an active investment. BU's official site lists its Munich office; BU is a direct-investing mid-market private-equity firm across DACH and neighboring economies."
+  },
+  {
+    "name": "Stoðir",
+    "website": "https://www.stodir.com/",
+    "country": "IS",
+    "kind": "holding_company",
+    "source_url": "https://www.stodir.com/",
+    "source_note": "Official site describes Stoðir as a privately owned Icelandic investment company that invests in selected projects where it can take an active role; site documents a Reykjavík office."
+  },
+  {
+    "name": "Gyrus Capital",
+    "website": "https://gyruscapital.com/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://www.gyruscapital.com/investment-approach",
+    "source_note": "Geneva-based PE firm; official investment approach states buyouts with majority or significant minority control/governance rights and lists portfolio investments including Swiss-headquartered Neo Medical."
+  },
+  {
+    "name": "Patrimonium Private Equity",
+    "website": "https://www.patrimonium.ch/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://www.patrimonium.ch/asset-classes/private-equity",
+    "source_note": "Swiss private-markets manager with offices in Baar, Zurich, and Lausanne; its PE page says it provides equity to mid-sized companies mainly in Germany, Austria, and Switzerland and uses targeted acquisitions."
+  },
+  {
+    "name": "Capital Transmission",
+    "website": "https://capitaltransmission.ch/en/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://capitaltransmission.ch/en/our-approach/",
+    "source_note": "Swiss PE investor with Geneva and Zurich offices, focused primarily on Switzerland; official page describes equity/quasi-equity for SME growth, succession, and buyout transactions, with portfolio investments in Swiss companies."
+  },
+  {
+    "name": "Porterhouse Group AG",
+    "website": "https://www.porterhouse.ch/en/home",
+    "country": "CH",
+    "kind": "holding_company",
+    "source_url": "https://www.porterhouse.ch/en/home",
+    "source_note": "Lucerne-based Swiss holding company; official site says it invests its own funds and seeks majority positions in operating companies, including Swiss portfolio companies."
+  },
+  {
+    "name": "F.G. Pfister",
+    "website": "https://www.fgpfister.ch/en/",
+    "country": "CH",
+    "kind": "holding_company",
+    "source_url": "https://www.fgpfister.ch/en/about-us/history",
+    "source_note": "Swiss holding/investment company backed by the F.G. Pfister Foundation; official history documents nine Swiss SME holdings added through succession transactions since 2020 and a long-term ownership model."
+  },
+  {
+    "name": "Haute Capital Partners",
+    "website": "https://www.haute.com/",
+    "country": "CH",
+    "kind": "private_equity",
+    "source_url": "https://www.haute.com/",
+    "source_note": "Swiss-listed PE holding company; official site states it invests directly in selected private Swiss businesses and actively manages participations, with a current portfolio of non-listed companies."
+  },
+  {
+    "name": "CC Trust Group AG",
+    "website": "https://www.cctrust.ch/",
+    "country": "CH",
+    "kind": "family_office",
+    "source_url": "https://www.cctrust.ch/",
+    "source_note": "Official site identifies CC Trust as a Switzerland-based family office that invests in and develops existing companies, acting as business owner/investor and listing a current portfolio of more than 15 investments."
+  },
+  {
+    "name": "PALOSANTO",
+    "website": "https://www.pspfo.ch/",
+    "country": "CH",
+    "kind": "family_office",
+    "source_url": "https://www.pspfo.ch/",
+    "source_note": "Official site identifies PALOSANTO as a Geneva-headquartered single-family investment vehicle and active investor in companies; it states it can take majority or minority equity positions."
+  },
+  {
+    "name": "M&S Ventures Group",
+    "website": "https://www.ms-ventures-group.com/",
+    "country": "CH",
+    "kind": "holding_company",
+    "source_url": "https://www.ms-ventures-group.com/",
+    "source_note": "Official site describes a privately owned investment/holding group based in the Lake Geneva region that invests its own capital and holds controlling interests in Swiss companies."
+  },
+  {
+    "name": "Hu2 Capital Partners AG",
+    "website": "https://www.hu2.ch/",
+    "country": "CH",
+    "kind": "holding_company",
+    "source_url": "https://www.hu2.ch/",
+    "source_note": "Zurich-based investment company; its official site documents a 2022 full takeover of a manufacturer with operations in Switzerland and Germany, alongside other operating-company ventures."
+  }
+]

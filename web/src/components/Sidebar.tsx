@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard,
   Building2,
+  BriefcaseBusiness,
   Send,
   Compass,
   GitCompareArrows,
@@ -18,6 +19,7 @@ import { useAuth } from '../lib/auth'
 const NAV_ITEMS = [
   { to: '/overview', label: 'Overview', icon: LayoutDashboard, segment: 'overview' },
   { to: '/companies', label: 'Companies', icon: Building2, segment: 'companies' },
+  { to: '/buyers', label: 'Buyers', icon: BriefcaseBusiness, segment: 'buyers' },
   { to: '/outreach', label: 'Outreach', icon: Send, segment: 'outreach' },
   { to: '/futures', label: 'Futures', icon: Compass, segment: 'futures' },
   { to: '/matches', label: 'Matches', icon: GitCompareArrows, segment: 'matches' },
@@ -43,7 +45,7 @@ export function Sidebar({ assistantOpen, onToggleAssistant }: { assistantOpen: b
   return (
     <nav className={folded ? 'sidebar sidebar--folded' : 'sidebar'} aria-label="Primary">
       <div className="sidebar__brand">
-        <span className="sidebar__mark" aria-hidden="true" />
+        <img className="sidebar__mark" src="/logo.png" alt="" />
         <span className="sidebar__name">Permetheus</span>
         <button
           type="button"

@@ -249,6 +249,11 @@ class ReviewIn(BaseModel):
 def review_evidence(evidence_id: uuid.UUID, body: ReviewIn, db: Session = Depends(get_db)):
     observation = get_or_404(db, Evidence, evidence_id)
     observation.review_status = body.status
+    if observation.field.startswith('buyer_'):
+        from .buyers import BuyerProfile, refresh_profile
+        db.flush()
+        for buyer in db.scalars(select(BuyerProfile).where(BuyerProfile.company_id == observation.company_id)):
+            refresh_profile(db, buyer)
     record_activity(db, "evidence.reviewed", "Evidence reviewed", observation.company_id, evidence_id=str(evidence_id), decision=body.status.value, reason=body.reason)
     db.commit()
     return observation

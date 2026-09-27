@@ -1,4 +1,5 @@
 import itertools
+import gzip
 import json
 import sys
 import threading
@@ -182,6 +183,12 @@ class FetchPublicUrlBoundsTests(unittest.TestCase):
         self.assertEqual(result.redirect_chain, ["http://example.com/next"])
         self.assertEqual(len(factory.calls), 2)
 
+    def test_https_host_header_has_no_redundant_port(self):
+        connection = _FakeConnection(_html_response('<html>Investor</html>'))
+        with mock.patch.object(acquisition, '_resolve_host', return_value=[PUBLIC_IP]), mock.patch.object(acquisition, '_open_connection', return_value=connection):
+            acquisition.fetch_public_url('https://example.com/')
+        self.assertEqual(connection.requested[2]['Host'], 'example.com')
+
     def test_bounds_redirect_count(self):
         redirects = [_FakeResponse(302, [("Location", f"http://example.com/hop{i}")], b"") for i in range(10)]
         p1, p2, _ = self._patched(redirects)
@@ -244,12 +251,23 @@ class FetchPublicUrlBoundsTests(unittest.TestCase):
         self.assertEqual(str(ctx.exception), "unsupported_content_type")
 
     def test_compressed_response_rejected(self):
-        response = _FakeResponse(200, [("Content-Type", "text/html"), ("Content-Encoding", "gzip")], b"\x1f\x8b")
+        response = _FakeResponse(200, [("Content-Type", "text/html"), ("Content-Encoding", "br")], b"\x1f\x8b")
         p1, p2, _ = self._patched([response])
         with p1, p2:
             with self.assertRaises(acquisition.FetchError) as ctx:
                 acquisition.fetch_public_url("http://example.com/")
         self.assertEqual(str(ctx.exception), "compressed_response_rejected")
+
+    def test_gzip_is_decoded_with_an_expanded_size_bound(self):
+        for text, limit, error in [('<p>Investor</p>', 1000, None), ('x' * 10000, 100, 'response_too_large')]:
+            response = _FakeResponse(200, [('Content-Type', 'text/html'), ('Content-Encoding', 'gzip')], gzip.compress(text.encode()))
+            p1, p2, _ = self._patched([response])
+            with p1, p2:
+                if error:
+                    with self.assertRaisesRegex(acquisition.FetchError, error):
+                        acquisition.fetch_public_url('https://example.com', max_bytes=limit)
+                else:
+                    self.assertEqual(acquisition.fetch_public_url('https://example.com', max_bytes=limit).text, text)
 
     def test_overall_timeout_bounds_the_whole_fetch(self):
         with mock.patch.object(acquisition.time, "monotonic", side_effect=[0, 100]):
@@ -491,6 +509,9 @@ class PageExtractorTests(unittest.TestCase):
         self.assertIn("https://other.example/partner", extractor.links)
         self.assertEqual(extractor.mailto, ["sales@example.com"])
         self.assertEqual(extractor.tel, ["+358401234567"])
+        directory = acquisition._PageExtractor("https://example.com/association/members")
+        directory.feed('<base href="https://example.com/"><a href="association/profile">Investor</a>')
+        self.assertEqual(directory.links, ["https://example.com/association/profile"])
 
 
 class ResearchWebsiteTests(unittest.TestCase):
@@ -623,15 +644,32 @@ class ResearchWebsiteTests(unittest.TestCase):
                     body=b"", text="", redirect_chain=[], truncated=False, fetched_at=acquisition._now(),
                 )
             seen_kwargs.append(kwargs)
-            if not kwargs.get("allow_cross_host_redirects", True):
-                raise acquisition.FetchError("cross_host_redirect_blocked")
-            raise AssertionError("crawl must disable cross-host redirects")
+            kwargs['before_redirect']('https://other.example/landing')
+            raise AssertionError('cross-site redirect must be rejected')
 
         with mock.patch.object(acquisition, "fetch_public_url", side_effect=fake_fetch):
             research = acquisition.research_website("https://example.com/", max_pages=3)
-        self.assertEqual(seen_kwargs, [{"allow_cross_host_redirects": False}])
+        self.assertEqual(len(seen_kwargs), 1)
         self.assertEqual(research.pages[0].error, "cross_host_redirect_blocked")
         self.assertIn("cross_host_redirect_blocked", research.errors[0])
+
+    def test_www_redirect_checks_destination_robots_before_request(self):
+        for disallow in ('', '/'):
+            responses = [
+                _html_response('User-agent: *\nDisallow:\n'),
+                _FakeResponse(301, [('Location', 'https://www.example.com/')], b''),
+                _html_response(f'User-agent: *\nDisallow: {disallow}\n'),
+                _html_response('<html><title>Firm</title><p>Investment company</p></html>'),
+            ]
+            factory = _FakeConnectionFactory(responses)
+            with mock.patch.object(acquisition, '_resolve_host', return_value=[PUBLIC_IP]), mock.patch.object(acquisition, '_open_connection', factory):
+                result = acquisition.research_website('https://example.com/', max_pages=1)
+            if disallow:
+                self.assertEqual(len(factory.calls), 3)
+                self.assertIn('https://www.example.com/', result.robots_disallowed)
+            else:
+                self.assertEqual(len(factory.calls), 4)
+                self.assertEqual(result.pages[0].title, 'Firm')
 
     def test_crawl_discards_same_host_redirect_into_robots_disallowed_path(self):
         robots_txt = "User-agent: *\nDisallow: /private\n"

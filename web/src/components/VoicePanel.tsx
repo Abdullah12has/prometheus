@@ -402,7 +402,7 @@ export function VoicePanel() {
         if (data.type === 'ready') {
           void audio.startCapture((capture: VoiceAudioEvent) => {
             if (socket.readyState !== WebSocket.OPEN) return
-            if (capture.type === 'speech_start') socket.send(JSON.stringify({ type: 'interrupt' }))
+            if (capture.type === 'speech_start') { audio.interrupt(); socket.send(JSON.stringify({ type: 'interrupt' })) }
             else if (capture.type === 'speech_end') socket.send(JSON.stringify({ type: 'end_turn' }))
             else if (capture.type === 'pcm') socket.send(new Int16Array(capture.samples).buffer)
           }, (utteranceId) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'playback_ack', utterance_id: utteranceId })) }).then(() => setCallState('live')).catch((cause) => { setError(voiceError(cause)); void stopCall() })

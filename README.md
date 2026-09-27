@@ -20,11 +20,14 @@ See [local setup and recovery](LOCAL_SETUP.md) for the pinned speech model, back
 ## Main workflows
 
 - **Companies:** paste a name or website, or import Finnish and Swiss registry data and Germany's public LEI subset. Filter by country, search identifiers, and pause/resume population or background research. See [source coverage](DATA_SOURCES.md). Inspect research coverage, sources, contacts and financials. Scraped facts are proposals; review them before relying on them for matching. Upload text PDF/iXBRL statements under Financials. Scanned PDFs need manual review.
+- **Buyers:** discover private equity, family offices and direct-investment holding companies across the Nordics, Switzerland and Germany. Search profiles by name or strategy, inspect sourced preferences, exclusions and portfolio history, then explicitly create an unverified public strategy for matching. Discovery and research have separate progress and retry controls.
 - **Futures:** record owner conditions, confirm an exact version, and compare hypothetical scenarios without changing the confirmed conditions.
 - **Matches:** record sourced buyer mandates, run comparisons, inspect reasons and missing evidence, record outcomes, and replay historical snapshots. An authorized brief can become an unapproved email draft.
 - **Outreach:** connect Gmail, review drafts and recipients, approve exact content, then send. Manage follow-up sequences, opt-outs and the global stop control here. No email is sent simply by researching or matching a company.
 - **Voice & notes:** name an agent, record or upload a 3–30 second voice sample in the same form, then save to clone and preview it. Failed clones retain the sample for retry; a bundled voice is also available. Run browser conversations with optional saved transcripts. The Notes tab records locally, resumes pending uploads, transcribes and proposes a summary. Failed transcriptions can be retried without losing corrections. Audio and transcripts stay in local storage; text sent to the configured model leaves the machine.
 - **Assistant:** describe actions in plain English. It uses the same application APIs to research, prepare drafts and run comparisons; confirmations and sending remain explicit UI actions.
+
+For a research demo, open a company and select **Refresh research**. The activity card shows queue state, identity lookup, website crawl, public search, extraction and evidence saving. Source counts and timestamped events come from the actual worker and survive a reload. Interactive jobs take the next free slot ahead of bulk research. Coverage distinguishes missing information, proposed findings and reviewed facts.
 
 ## Connections
 
@@ -40,9 +43,12 @@ Paid telephone calling is deferred. Leave `TWILIO_FROM_NUMBER` and `PUBLIC_BASE_
 make check
 cd web
 npx playwright test tests/company.spec.ts tests/workspace.spec.ts tests/matches.spec.ts
+npx playwright test tests/buyers.spec.ts tests/buyers-live.spec.ts tests/assistant.spec.ts
 RUN_VOICE_E2E=1 RUN_NOTES_E2E=1 npx playwright test tests/voice.spec.ts tests/voice-clone.spec.ts tests/notes-recording.spec.ts
 # Optional live registry check; requires the imported Reformo Networks Oy demo record:
 RUN_RESEARCH_E2E=1 npx playwright test tests/research.spec.ts
+# Real company website/search/model enrichment from the UI; requires imported Vincit Oyj:
+RUN_ENRICHMENT_E2E=1 npx playwright test tests/enrichment-ui.spec.ts
 # Optional populated-country UI check; requires at least 100 imported Swiss companies:
 RUN_REGISTRY_E2E=1 npx playwright test tests/discovery-ui.spec.ts
 ```

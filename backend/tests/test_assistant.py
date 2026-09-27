@@ -15,7 +15,7 @@ class FakeLLM:
         self.calls = list(calls)
         self.seen = []
 
-    async def complete(self, messages, *, tools=None):
+    async def complete(self, messages, *, tools=None, **options):
         self.seen.append(messages)
         answer = self.calls.pop(0) if self.calls else {"content": "Okay."}
         if isinstance(answer, Exception):
@@ -204,3 +204,39 @@ def test_deep_schemas_keep_scalar_enum_and_required_values():
         elif isinstance(value, list):
             for child in value: check(child)
     check(tools)
+
+
+def test_company_lookup_by_name_then_action_and_followup_context():
+    with run([]) as client:
+        company = client.post("/api/companies", json={"name": "North Star Oy"}).json()["company"]
+        client.app.state.llm.calls = [
+            tool("list_companies_api_companies_get", json.dumps({"query": {"q": "North Star"}})),
+            tool("get_company_api_companies__company_id__get", json.dumps({"path_params": {"company_id": company["id"]}})),
+            {"content": "Found North Star Oy."},
+        ]
+        result = client.post("/api/assistant", json={"message": "Tell me about North Star"}).json()
+        assert result["actions"][0]["result"]["items"][0]["id"] == company["id"]
+        client.post("/api/assistant", json={"message": "Research that company", "conversation_id": result["conversation_id"]})
+        assert company["id"] in json.dumps(client.app.state.llm.seen[-1])
+
+
+def test_large_results_preserve_records_instead_of_discarding_everything():
+    with run([tool("list_companies_api_companies_get", "{}"), {"content": "Companies found."}]) as client:
+        for i in range(20):
+            client.post("/api/companies", json={"name": f"Company {i}", "description": "Evidence " * 200})
+        result = client.post("/api/assistant", json={"message": "List companies"}).json()
+        assert result["actions"][0]["result"].get("items")
+
+
+def test_grounded_search_returns_clickable_sources_and_handles_outage(monkeypatch):
+    from types import SimpleNamespace
+    from permetheus import acquisition
+    monkeypatch.setattr(acquisition, "search_web", lambda *a, **k: SimpleNamespace(
+        results=[SimpleNamespace(title="Official report", url="https://example.org/report", content="Revenue was 10 million.")],
+        degraded=False, fetched_at="2026-09-27"))
+    with run([tool("search_sources_api_assistant_search_get", json.dumps({"query": {"q": "market report"}})), {"content": "Revenue was 10 million [1]."}]) as client:
+        result = client.post("/api/assistant", json={"message": "Find the market report"}).json()
+        assert result["actions"][0]["status"] == 200
+        assert result["actions"][0]["result"]["sources"][0]["url"] == "https://example.org/report"
+        client.app.state.settings.searxng_url = None
+        assert client.get("/api/assistant/search", params={"q": "market"}).status_code == 503

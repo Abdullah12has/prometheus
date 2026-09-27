@@ -25,7 +25,7 @@ export function LoginView() {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
-        <div className="login-card__mark" aria-hidden="true" />
+        <img className="login-card__mark" src="/logo.png" alt="" />
         <h1>Permetheus</h1>
         <p className="login-card__subtitle">Sign in to your workspace</p>
 

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     google_client_secret: SecretStr | None = None
     litellm_base_url: str | None = Field(None, validation_alias=AliasChoices("LLM_BASE_URL", "LITELLM_BASE_URL", "litellm_base_url"))
     litellm_api_key: SecretStr | None = Field(None, validation_alias=AliasChoices("LLM_API_KEY", "LITELLM_API_KEY", "litellm_api_key"))
+    llm_chat_model: str | None = None
     llm_reasoning_effort: str | None = None
     litellm_model: str | None = Field(None, validation_alias=AliasChoices("LLM_MODEL", "LITELLM_MODEL", "litellm_model"))
     searxng_url: str | None = "http://localhost:8888"

@@ -36,6 +36,16 @@ def make_due(Session, job_id):
         db.commit()
 
 
+def test_interactive_job_precedes_older_bulk_campaign(Session):
+    with Session() as db:
+        bulk = Job(kind='company.enrich', idempotency_key='bulk', payload={'campaign_id': 'campaign'},
+                   available_at=datetime.now(timezone.utc) - timedelta(hours=1))
+        manual = Job(kind='company.enrich', idempotency_key='manual', payload={})
+        db.add_all([bulk, manual]); db.commit()
+        claimed, _ = worker.claim_job(db)
+        assert claimed.id == manual.id
+
+
 def test_claim_job_defaults_to_research_kinds_and_accepts_explicit_kinds(Session):
     with Session() as db:
         db.add(Job(kind="note.transcribe", idempotency_key="note.transcribe:n1", payload={}))

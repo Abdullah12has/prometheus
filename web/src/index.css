@@ -391,10 +391,9 @@ textarea:focus-visible {
 }
 
 .sidebar__mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: var(--bg-inverted);
+  width: 24px;
+  height: 29px;
+  object-fit: contain;
   flex-shrink: 0;
 }
 
@@ -627,10 +626,9 @@ textarea:focus-visible {
 }
 
 .login-card__mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--bg-inverted);
+  width: 40px;
+  height: 48px;
+  object-fit: contain;
   margin-bottom: 20px;
 }
 
