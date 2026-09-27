@@ -208,6 +208,7 @@ def create_company(body: CompanyIn, response: Response, db: Session = Depends(ge
 
 @router.get("", response_model=CompanyPage)
 def list_companies(q: str | None = Query(None, max_length=200), status: CompanyStatus | None = None,
+                   country: str | None = Query(None, pattern="^[A-Za-z]{2}$"),
                    limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
     query = select(Company)
     if q and q.strip():
@@ -219,8 +220,10 @@ def list_companies(q: str | None = Query(None, max_length=200), status: CompanyS
         ))
     if status:
         query = query.where(Company.status == status)
+    if country:
+        query = query.where(Company.country == country.upper())
     total = db.scalar(select(func.count()).select_from(query.subquery()))
-    items = db.scalars(query.order_by(Company.created_at.desc()).limit(limit).offset(offset)).all()
+    items = db.scalars(query.order_by(Company.created_at.desc(), Company.id.desc()).limit(limit).offset(offset)).all()
     return CompanyPage(items=items, total=total)
 
 

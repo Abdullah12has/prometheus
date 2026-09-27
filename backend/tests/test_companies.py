@@ -83,6 +83,17 @@ def test_identifier_conflict_between_companies(client):
     assert client.post(f"/api/companies/{a}/identifiers", json={"country": "FI", "business_id": "0112038-9"}).status_code == 200
 
 
+def test_country_filter_keeps_pagination_and_search_within_country(client):
+    for name, country in [("Alpine One", "CH"), ("Alpine Two", "CH"), ("Alpine Three", "DE")]:
+        assert create(client, name=name, country=country).status_code == 201
+    first = client.get("/api/companies", params={"country": "ch", "q": "Alpine", "limit": 1}).json()
+    second = client.get("/api/companies", params={"country": "CH", "q": "Alpine", "limit": 1, "offset": 1}).json()
+    assert first["total"] == second["total"] == 2
+    assert first["items"][0]["country"] == second["items"][0]["country"] == "CH"
+    assert first["items"][0]["id"] != second["items"][0]["id"]
+    assert client.get("/api/companies", params={"country": "Germany"}).status_code == 422
+
+
 def test_delete_cancels_jobs_and_leaves_content_free_tombstone(client):
     cid = create(client, name="Secret Target Oy").json()["company"]["id"]
     client.post(f"/api/companies/{cid}/contacts", json={"name": "Owner", "email": "o@target.fi"})

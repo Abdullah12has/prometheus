@@ -287,6 +287,24 @@ def test_refresh_matches_only_creates_runs_for_changed_inputs(api):
     assert len({run["snapshot_hash"] for run in runs}) == 3
 
 
+def test_refresh_match_batches_consider_new_companies_without_owner_profiles(api):
+    company_ids = [company(api, f"Target {n}", revenue=None, industry=None) for n in range(3)]
+    mandate(api, "Buyer A")
+    sessionmaker = api.app.state.sessionmaker
+
+    first_count, cursor = deals.refresh_match_batch(sessionmaker, limit=2)
+    assert first_count == 2
+    assert cursor is not None
+
+    last_count, cursor = deals.refresh_match_batch(sessionmaker, after_id=cursor, limit=2)
+    assert last_count == 1
+    assert cursor is None
+
+    for company_id in company_ids:
+        [run] = ok(api.get(f"/api/match-runs?company_id={company_id}"))
+        assert run["counts"]["research_needed"] == 1
+
+
 def test_match_runs_exclude_buyer_company_itself_manually_and_automatically(api):
     buyer_company = company(api, "Buyer Legal Entity")
     target_company = company(api, "Independent Target Oy")

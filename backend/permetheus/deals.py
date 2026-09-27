@@ -1252,12 +1252,20 @@ def create_match_run(body: MatchRunIn, db: Session = Depends(get_db)):
     return run_detail(db, run)
 
 
-def refresh_matches(sessionmaker: sessionmaker[Session]) -> int:
+def refresh_matches(sessionmaker: sessionmaker[Session], company_ids: list[uuid.UUID] | None = None) -> int:
     """Refresh company runs only when their accepted input or visible comparables changed."""
-    # ponytail: scans the personal workspace; use change-triggered jobs if it grows beyond a few hundred companies.
     refreshed = 0
     with sessionmaker() as db:
-        companies = db.scalars(select(Company).order_by(Company.id)).all()
+        try:
+            select_mandates(db, None)
+        except ApiError as exc:
+            if exc.code == "no_active_mandates":
+                return 0
+            raise
+        query = select(Company).order_by(Company.id)
+        if company_ids is not None:
+            query = query.where(Company.id.in_(company_ids))
+        companies = db.scalars(query).all()
         for company in companies:
             try:
                 mandates = select_mandates(db, None, company.id)
@@ -1283,6 +1291,22 @@ def refresh_matches(sessionmaker: sessionmaker[Session]) -> int:
                 create_match_run(MatchRunIn(company_id=company.id), db)
                 refreshed += 1
     return refreshed
+
+
+def refresh_match_batch(sessionmaker: sessionmaker[Session], after_id: uuid.UUID | None = None,
+                        limit: int = 100) -> tuple[int, uuid.UUID | None]:
+    """Refresh one keyset page; ``None`` cursor means start again from the first company."""
+    if limit < 1:
+        raise ValueError("limit must be positive")
+    with sessionmaker() as db:
+        query = select(Company.id)
+        if after_id is not None:
+            query = query.where(Company.id > after_id)
+        company_ids = list(db.scalars(query.order_by(Company.id).limit(limit)))
+    if not company_ids:
+        return 0, None
+    next_id = company_ids[-1] if len(company_ids) == limit else None
+    return refresh_matches(sessionmaker, company_ids), next_id
 
 
 @router.get("/match-runs", response_model=list[MatchRunOut])
