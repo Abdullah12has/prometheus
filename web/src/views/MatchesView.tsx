@@ -36,6 +36,7 @@ import {
   type ReplayResponse, type SourceIn, type SourceOut, type SpeakerAuthority, type Structure,
 } from '../lib/dealsTypes'
 import './deals.css'
+import { FutureSimulations } from '../components/FutureSimulations'
 
 const STRUCTURES: Structure[] = ['minority_investment', 'majority_sale', 'full_sale']
 const CCY_OPTIONS = ['EUR', 'USD', 'GBP', 'SEK', 'NOK', 'DKK']
@@ -48,7 +49,7 @@ const TABS = [
   { id: 'analytics', label: 'Analytics' },
   { id: 'replay', label: 'Simulate (as-of)' },
 ] as const
-type TabId = typeof TABS[number]['id']
+type TabId = typeof TABS[number]['id'] | 'explore'
 
 function StatusPill({ status }: { status: 'compatible' | 'research_needed' | 'excluded' }) {
   return <span className={`status-pill status-pill--${status}`}>{MATCH_STATUS_LABELS[status]}</span>
@@ -109,20 +110,20 @@ function SourcePicker({
 }
 
 export function MatchesView() {
-  const [tab, setTab] = useState<TabId>('mandates')
+  const [tab, setTab] = useState<TabId>('explore')
 
   return (
     <div className="page">
       <header className="page__header">
-        <h1>Matches</h1>
+        <h1>Future simulations</h1>
         <p className="page__lede">
-          Buyer mandates, match runs against owner-confirmed conditions, resulting opportunities and their
-          recorded outcomes. Results are ranked as potentially compatible, needing research, or excluded —
-          never a probability, offer or guarantee.
+          Explore potential buyers and the decisions that could make a transaction possible, grounded in your company research.
         </p>
       </header>
 
-      <nav className="view-tabs" aria-label="Matches sections">
+      {tab !== 'explore' && <button type="button" className="btn btn--secondary" onClick={() => setTab('explore')}>Back to guided simulations</button>}
+      <details className="simulation-advanced"><summary>Advanced tools</summary>
+      <nav className="view-tabs" aria-label="Future simulations sections">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -134,8 +135,9 @@ export function MatchesView() {
             {t.label}
           </button>
         ))}
-      </nav>
+      </nav></details>
 
+      {tab === 'explore' && <FutureSimulations />}
       {tab === 'mandates' && <MandatesTab />}
       {tab === 'matches' && <MatchesTab />}
       {tab === 'opportunities' && <OpportunitiesTab />}

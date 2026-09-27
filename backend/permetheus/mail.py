@@ -947,10 +947,12 @@ def _finalize_sent(db: Session, draft: OutreachDraft, record: Dispatch, sender: 
     return True
 
 
-def dispatch(app: FastAPI, db: Session, draft_id: uuid.UUID) -> OutreachDraft:
+def dispatch(app: FastAPI, db: Session, draft_id: uuid.UUID, preview: ApproveIn | None = None) -> OutreachDraft:
     account = _connected(db)
     token = access_token(app, db, account)
     draft = get_or_404(db, OutreachDraft, draft_id)
+    if preview and (preview.version != draft.version or not hmac.compare_digest(preview.content_hash, content_hash(draft))):
+        raise ApiError(409, "stale_preview", "The draft changed after review; review the current version before sending")
     _check_sendable(db, draft)
     conv = db.get(Conversation, draft.conversation_id) if draft.conversation_id else None
     if conv:
@@ -1011,8 +1013,8 @@ def dispatch(app: FastAPI, db: Session, draft_id: uuid.UUID) -> OutreachDraft:
 
 
 @router.post("/outreach/drafts/{draft_id}/send")
-def send_draft(draft_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    return _draft_out(db, dispatch(request.app, db, draft_id))
+def send_draft(draft_id: uuid.UUID, request: Request, body: ApproveIn | None = None, db: Session = Depends(get_db)):
+    return _draft_out(db, dispatch(request.app, db, draft_id, body))
 
 
 @router.post("/outreach/reconcile")

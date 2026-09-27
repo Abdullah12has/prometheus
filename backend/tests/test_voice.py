@@ -385,7 +385,7 @@ def test_full_turn_persists_transcript_and_never_touches_company(v):
     assert "never claim or imply to be human" in system and "Acme Oy" in system
     assert "financial.revenue=missing" in system and "financial.ebitda=missing" in system
     assert "financial.employees=missing" in system and "owner_intent=unconfirmed" in system
-    assert "First ask whether the person is willing" in system
+    assert "only after interest and permission" in system
     assert "period, currency, and reporting scope" in system
     assert "Proposed facts are unreviewed" in system and "Do not change records" in system
     detail = v.client.get(f"/api/voice/sessions/{s['session_id']}").json()
@@ -473,3 +473,29 @@ def test_replaced_synthesis_tasks_are_cleaned_up_on_stop():
         await asyncio.wait_for(conversation.stop_reply(), 2)
         assert first.done() and stopped.is_set()
     asyncio.run(check())
+
+
+def test_broker_default_introduction_uses_agent_name_in_preview_and_call(v):
+    agent = v.client.post('/api/voice/agents', json={'name': 'Alex'}).json()
+    assert 'selling your company' in agent['introduction']
+    assert v.client.get(f"/api/voice/agents/{agent['id']}/preview").status_code == 200
+    greeting = v.runtime.spoken[-1][0]
+    assert "I'm Alex from Mergero" in greeting and 'AI' in greeting
+    assert '{name}' not in greeting
+    session = start_session(v, agent['id'])
+    with connect(v, session['session_id']) as ws:
+        ws.send_json({'type': 'auth', 'ticket': session['ticket']})
+        until(ws, 'ready')
+        _, events = until(ws, 'agent_done')
+        assert next(e['text'] for e in events if e['type'] == 'agent_text') == greeting
+        ws.send_json({'type': 'stop'})
+        until(ws, 'ended')
+
+
+def test_broker_flow_applies_without_company_context():
+    conversation = voice_mod.Conversation(None, None, None, None, uuid.uuid4(),
+        {'name': 'Alex', 'instructions': ''}, None, False)
+    prompt = conversation.messages()[0]['content']
+    assert 'Mergero' in prompt and 'acquisition outreach representative' in prompt
+    assert 'email' in prompt and 'future' in prompt and 'do not contact' in prompt
+    assert 'one question at a time' in prompt

@@ -1,0 +1,55 @@
+.future-sim { display: grid; gap: 22px; max-width: 1120px; }
+.future-sim h2 { font-size: 25px; margin: 8px 0; letter-spacing: -.6px; }
+.future-sim h3 { font-size: 22px; margin: 5px 0; }
+.future-sim h4 { margin: 22px 0 12px; font-size: 14px; }
+.future-sim p { line-height: 1.6; }
+.future-sim__intro { padding: 28px; background: #eef3ec; border: 1px solid #d4dfcf; border-radius: 14px; }
+.future-sim__intro p { max-width: 650px; }
+.future-sim__eyebrow { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: #5f7059; font-weight: 650; }
+.future-sim__steps { display: flex; flex-wrap: wrap; gap: 30px; padding-left: 20px; margin: 22px 0 0; font-size: 13px; }
+.future-sim__start { display: flex; align-items: end; gap: 16px; }
+.future-sim__start > div { flex: 1; }
+.future-sim__start label { display: block; margin-bottom: 8px; font-weight: 600; }
+.future-sim__start > button { min-height: 42px; white-space: nowrap; }
+.future-sim__suggested { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.future-sim__suggested > span { width: 100%; font-size: 12px; color: #6a6a64; }
+.future-sim__suggested button { padding: 8px 10px; border: 1px solid #deded6; border-radius: 7px; background: transparent; font-size: 12px; cursor: pointer; }
+.future-sim__suggested small { margin-left: 8px; color: #73736b; }
+.future-sim button[aria-pressed=true] { background: #e9efdf; border-color: #687b44; }
+.future-sim__progress { display: flex; gap: 15px; padding: 24px; background: #f2f3ed; border-radius: 10px; }
+.future-sim__progress p { margin: 5px 0 0; }
+.future-sim__error { padding: 18px; background: #fff4ef; border: 1px solid #e7cbbf; border-radius: 10px; }
+.future-sim__results-header { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 12px; }
+.future-sim__results-header p { margin: 8px 0 0; color: #73736b; font-size: 13px; }
+.future-sim__notice { padding: 12px 16px; border-left: 3px solid #b3ba88; background: #f5f5ed; margin: 0; font-size: 13px; }
+.future-sim__results { display: grid; gap: 22px; }
+.future-sim__buyer { border: 1px solid #deded6; border-radius: 13px; padding: 26px; background: #fff; }
+.future-sim__buyer > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.future-sim__buyer h3 a { color: inherit; text-decoration: none; }
+.future-sim__buyer h3 a:hover { text-decoration: underline; }
+.future-sim__reason { font-size: 15px; margin-bottom: 4px; }
+.future-sim details { margin-top: 8px; }
+.future-sim summary { cursor: pointer; padding: 10px 0; font-size: 13px; font-weight: 600; }
+.future-sim summary svg { vertical-align: middle; margin-right: 5px; }
+.future-sim__evidence > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.future-sim blockquote { margin: 0; padding: 15px; background: #f7f7f2; border-left: 2px solid #c0caa4; overflow-wrap: anywhere; }
+.future-sim blockquote span, .future-sim blockquote small { display: block; font-size: 11px; color: #6a6a64; }
+.future-sim blockquote p { font-size: 12px; margin: 8px 0; }
+.future-sim blockquote a { font-size: 12px; }
+.future-sim__branches { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; }
+.future-sim__branches button { display: grid; gap: 8px; text-align: left; padding: 15px; border: 1px solid #d9dccf; border-radius: 8px; background: #fafaf7; cursor: pointer; }
+.future-sim__branches span { font-size: 11px; color: #636b56; }
+.future-sim__branch-detail { padding: 16px; margin-top: 10px; border: 1px solid #e1e4d7; background: #f8faf4; border-radius: 8px; font-size: 13px; }
+.future-sim__branch-detail ul { padding-left: 19px; }
+.future-sim__tree ol { list-style: none; padding-left: 14px; }
+.future-sim__tree li { padding: 0 0 22px 22px; border-left: 2px solid #bec8a8; position: relative; }
+.future-sim__tree li:before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #7a8b56; position: absolute; left: -5.5px; top: 5px; }
+.future-sim__tree li > span { display: block; margin: 5px 0 10px; }
+.future-sim__tree li > div { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.future-sim__tree li p { font-size: 12px; padding: 10px; margin: 0; background: #f5f6f0; border-radius: 5px; }
+.future-sim__tree b { display: block; margin-bottom: 4px; }
+.future-sim__history > div { display: grid; gap: 7px; }
+.future-sim__history button { display: flex; align-items: center; gap: 15px; text-align: left; padding: 13px; border: 1px solid #deded6; background: #fff; border-radius: 8px; cursor: pointer; }
+.future-sim__history button span { margin-left: auto; font-size: 12px; color: #73736b; }
+.future-sim__empty { padding: 25px; border: 1px dashed #c7cdb9; border-radius: 10px; }
+@media (max-width: 700px) { .future-sim__start, .future-sim__results-header { flex-direction: column; align-items: stretch; } .future-sim__branches, .future-sim__evidence > div, .future-sim__tree li > div { grid-template-columns: 1fr; } .future-sim__buyer { padding: 18px; } }

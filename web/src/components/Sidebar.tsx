@@ -21,8 +21,8 @@ const NAV_ITEMS = [
   { to: '/companies', label: 'Companies', icon: Building2, segment: 'companies' },
   { to: '/buyers', label: 'Buyers', icon: BriefcaseBusiness, segment: 'buyers' },
   { to: '/outreach', label: 'Outreach', icon: Send, segment: 'outreach' },
-  { to: '/futures', label: 'Futures', icon: Compass, segment: 'futures' },
-  { to: '/matches', label: 'Matches', icon: GitCompareArrows, segment: 'matches' },
+  { to: '/futures', label: 'Owner preferences', icon: Compass, segment: 'futures' },
+  { to: '/matches', label: 'Future simulations', icon: GitCompareArrows, segment: 'matches' },
   { to: '/voice-notes', label: 'Voice & notes', icon: Mic, segment: 'voice-notes' },
   { to: '/settings', label: 'Settings', icon: Settings, segment: 'settings' },
 ]

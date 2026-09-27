@@ -47,7 +47,7 @@ test('real login, company intake, edit, attributed intent and refresh', async ({
     await expect(page.getByText('I would discuss a minority investment if I retain operational control.')).toBeVisible()
     await page.screenshot({ path: '../data/screenshots/company.png', fullPage: true })
     await page.getByRole('link', { name: 'Research & explore futures' }).click()
-    await expect(page.getByRole('heading', { name: 'Futures', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Owner preferences', exact: true })).toBeVisible()
     await expect(page.getByLabel('Company', { exact: true })).toHaveValue(companyId!)
     await page.getByRole('button', { name: 'Propose new version' }).click()
     await page.getByLabel('Owner keeps operating control', { exact: true }).check()

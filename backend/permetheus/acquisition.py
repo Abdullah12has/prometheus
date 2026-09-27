@@ -566,8 +566,8 @@ def fetch_public_url(
 # Website research: text / contact / link extraction
 # ---------------------------------------------------------------------------
 
-_EMAIL_RE = re.compile(r"[A-Za-z0-9.+_-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]+")
-_PHONE_RE = re.compile(r"\+?\d[\d\s().-]{6,18}\d")
+_EMAIL_RE = re.compile(r"(?<![\w.+-])[A-Za-z0-9.+_-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?![\w.-])")
+_PHONE_RE = re.compile(r"(?<!\w)\+?\d[\d\s().-]{6,18}\d(?!\w)")
 # Plain digit runs matched by _PHONE_RE also match calendar dates
 # ("2024-01-01", "31.12.2023", a bare "2024"); reject those shapes explicitly
 # rather than reporting a date as a discovered phone number.
@@ -580,6 +580,119 @@ _DATE_LIKE_RES = (
 
 def _looks_like_date(value: str) -> bool:
     return any(pattern.match(value) for pattern in _DATE_LIKE_RES)
+
+
+def _valid_email(value: str) -> str | None:
+    value = urllib.parse.unquote(value).strip(" \t\r\n<>\"'.,;:!?()[]{}")
+    if not _EMAIL_RE.fullmatch(value) or value.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".pdf")):
+        return None
+    if value.lower().split("@", 1)[0] in {"example", "test", "user", "email"}:
+        return None
+    return value.lower()
+
+
+def _emails_in_text(text: str) -> list[str]:
+    normalized = re.sub(r"\s*(?:\[at\]|\(at\)|\{at\})\s*", "@", text, flags=re.I)
+    normalized = re.sub(r"\s*(?:\[dot\]|\(dot\)|\{dot\})\s*", ".", normalized, flags=re.I)
+    return list(dict.fromkeys(email for match in _EMAIL_RE.findall(normalized)
+                              if (email := _valid_email(match))))
+
+
+def _phone_value(value: str) -> str | None:
+    value = urllib.parse.unquote(value).split(";", 1)[0].strip()
+    digits = re.sub(r"\D", "", value)
+    if not 7 <= len(digits) <= 15:
+        return None
+    return ("+" if value.lstrip().startswith("+") else "") + digits
+
+
+def _contacts_in_text(text: str, source_url: str) -> list[ContactCandidate]:
+    contacts = [ContactCandidate("email", email, source_url, "text") for email in _emails_in_text(text)]
+    lowered = text.lower()
+    phone_context = re.compile(r"(?:tel(?:ephone)?|phone|call|fax|puh(?:elin)?|puhelin|telefon|téléphone|tlf|telefonnummer)", re.I)
+    billing_context = re.compile(r"(?:ovt|iban|bic|invoice|invoicing|billing|lasku|laskutus|rekening|rechnung)", re.I)
+    for match in _PHONE_RE.finditer(text):
+        raw = match.group().strip()
+        digits = re.sub(r"\D", "", raw)
+        context = lowered[max(0, match.start() - 48):match.end() + 24]
+        # A Finnish business ID is seven digits, a hyphen and a check digit.
+        if re.fullmatch(r"\d{7}-\d", raw) or digits.startswith("0037") or _looks_like_date(raw):
+            continue
+        if billing_context.search(context):
+            continue
+        # Plain numbers are too often business IDs, dates, or invoice data.
+        if len(digits) < 9 or (not raw.startswith("+") and not re.search(r"[ ().-]", raw) and not phone_context.search(context)):
+            continue
+        value = _phone_value(raw)
+        if value:
+            contacts.append(ContactCandidate("phone", value, source_url, "text"))
+    return contacts
+
+
+def _cloudflare_email(encoded: str) -> str | None:
+    try:
+        raw = bytes.fromhex(encoded)
+        key = raw[0]
+        return _valid_email(bytes(byte ^ key for byte in raw[1:]).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, IndexError):
+        return None
+
+
+def _organization_contacts(payload: object) -> list[tuple[str, str]]:
+    """Read contact properties only from schema.org organization JSON-LD."""
+    found: list[tuple[str, str]] = []
+    def visit(value: object, inherited_schema: bool = False) -> None:
+        if isinstance(value, list):
+            for item in value:
+                visit(item, inherited_schema)
+        elif isinstance(value, dict):
+            context = value.get("@context")
+            schema_context = inherited_schema or context in {"https://schema.org", "http://schema.org"}
+            types = value.get("@type", [])
+            if isinstance(types, str):
+                types = [types]
+            organization = schema_context and any(t in {"Organization", "Corporation", "LocalBusiness",
+                                                            "ProfessionalService", "NGO", "GovernmentOrganization"}
+                                                  for t in types)
+            if organization:
+                for key, kind in (("email", "email"), ("telephone", "phone")):
+                    values = value.get(key, [])
+                    if isinstance(values, str):
+                        values = [values]
+                    for item in values if isinstance(values, list) else []:
+                        if isinstance(item, str):
+                            if kind == "email":
+                                found.extend((kind, email) for email in _emails_in_text(item))
+                            elif (phone := _phone_value(item)):
+                                found.append((kind, phone))
+            for child in value.values():
+                visit(child, schema_context)
+
+    visit(payload)
+    return list(dict.fromkeys(found))
+
+
+def _page_contacts(text: str, source_url: str, extractor: _PageExtractor | None = None) -> list[ContactCandidate]:
+    contacts = _contacts_in_text(text, source_url)
+    if extractor is not None:
+        for mail in extractor.mailto:
+            for email in _emails_in_text(mail):
+                contacts.append(ContactCandidate("email", email, source_url, "mailto_link"))
+        for tel in extractor.tel:
+            if phone := _phone_value(tel):
+                contacts.append(ContactCandidate("phone", phone, source_url, "tel_link"))
+        for raw in extractor.json_ld:
+            try:
+                values = _organization_contacts(json.loads(raw))
+            except (json.JSONDecodeError, TypeError):
+                continue
+            contacts.extend(ContactCandidate(kind, value, source_url, "json_ld") for kind, value in values)
+    return _unique_candidates(contacts)
+
+
+def _unique_candidates(contacts: list[ContactCandidate]) -> list[ContactCandidate]:
+    return list({(contact.kind, contact.value, contact.source_url, contact.source): contact
+                 for contact in contacts}.values())
 
 
 class _PageExtractor(HTMLParser):
@@ -599,8 +712,14 @@ class _PageExtractor(HTMLParser):
         self._skip_depth = 0
         self._in_title = False
         self._base_seen = False
+        self.json_ld: list[str] = []
+        self._json_ld_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if tag == "script" and (attributes.get("type") or "").lower() == "application/ld+json":
+            self._json_ld_depth += 1
+            return
         if tag in self._SKIPPED_TAGS:
             self._skip_depth += 1
             return
@@ -608,34 +727,44 @@ class _PageExtractor(HTMLParser):
             self._in_title = True
             return
         if tag == "base" and not self._base_seen:
-            href = dict(attrs).get("href")
+            href = attributes.get("href")
             if href:
                 base = urllib.parse.urljoin(self.base_url, href)
                 parsed = urllib.parse.urlsplit(base)
                 if parsed.scheme in ("http", "https") and parsed.hostname and not parsed.username and not parsed.password:
                     self.base_url, self._base_seen = base, True
             return
+        if (encoded := attributes.get("data-cfemail")):
+            if (email := _cloudflare_email(encoded)):
+                self.mailto.append(email)
         if tag == "a":
-            href = dict(attrs).get("href")
+            href = attributes.get("href")
             if not href:
                 return
-            href = href.strip()
-            if href.startswith("mailto:"):
-                self.mailto.append(href[len("mailto:") :].split("?")[0])
-            elif href.startswith("tel:"):
-                self.tel.append(href[len("tel:") :])
+            href = urllib.parse.unquote(href.strip())
+            scheme, _, address = href.partition(":")
+            if scheme.lower() == "mailto":
+                recipients = urllib.parse.unquote(address.split("?", 1)[0]).split(",")
+                self.mailto.extend(item.strip() for item in recipients if item.strip())
+            elif scheme.lower() == "tel":
+                self.tel.append(urllib.parse.unquote(address))
             elif not href.startswith(("javascript:", "#")):
                 absolute = urllib.parse.urljoin(self.base_url, href)
                 if absolute.startswith(("http://", "https://")):
                     self.links.append(absolute)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in self._SKIPPED_TAGS and self._skip_depth:
+        if tag == "script" and self._json_ld_depth:
+            self._json_ld_depth -= 1
+        elif tag in self._SKIPPED_TAGS and self._skip_depth:
             self._skip_depth -= 1
         elif tag == "title":
             self._in_title = False
 
     def handle_data(self, data: str) -> None:
+        if self._json_ld_depth:
+            self.json_ld.append(data)
+            return
         if self._skip_depth:
             return
         if self._in_title:
@@ -713,7 +842,7 @@ def _load_robots(scheme_host: str, timeout: float) -> tuple[RobotFileParser | No
 
 def _research_priority(url: str) -> tuple[int, int]:
     path = urllib.parse.unquote(urllib.parse.urlsplit(url).path).lower()
-    if re.search(r"/(about|contact|team|company|investor|annual|financial|report|tilinpaatos|talous|yhteys|yritys|impressum|unternehmen|kontakt|ueber|über|legal|invoicing)", path):
+    if re.search(r"/(about|contact|team|company|investor|annual|financial|report|tilinpaatos|talous|yhteys|yhteystiedot|yritys|impressum|unternehmen|kontakt|kontaktuppgifter|ueber|über|legal|invoicing|contactez|coordonnees|coordonnées)", path):
         return 0, path.count("/")
     if re.search(r"blog|news|article|event|privacy|cookie|terms|tag|category", path):
         return 2, path.count("/")
@@ -847,6 +976,7 @@ def research_website(
         if include_documents and result.content_type == "application/pdf":
             try:
                 text = _web_pdf_text(result.body, text_excerpt_limit)
+                contacts.extend(_page_contacts(text, result.final_url))
                 pages.append(PageResult(result.final_url, 200, urllib.parse.urlsplit(result.final_url).path.rsplit('/', 1)[-1], text, [], None, result.fetched_at))
             except Exception as exc:
                 error = str(exc) if isinstance(exc, ValueError) else 'pdf_parse_failed'
@@ -876,16 +1006,7 @@ def research_website(
             continue
 
         text = extractor.text
-        for email in _EMAIL_RE.findall(text):
-            contacts.append(ContactCandidate("email", email.lower(), result.final_url, "text"))
-        for mail in extractor.mailto:
-            contacts.append(ContactCandidate("email", mail.lower(), result.final_url, "mailto_link"))
-        for tel in extractor.tel:
-            contacts.append(ContactCandidate("phone", tel.strip(), result.final_url, "tel_link"))
-        for match in _PHONE_RE.findall(text):
-            stripped = match.strip()
-            if 7 <= sum(c.isdigit() for c in match) <= 15 and not _looks_like_date(stripped):
-                contacts.append(ContactCandidate("phone", stripped, result.final_url, "text"))
+        contacts.extend(_page_contacts(text, result.final_url, extractor))
 
         for link in extractor.links:
             link = urllib.parse.urldefrag(link)[0]

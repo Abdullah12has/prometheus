@@ -134,7 +134,7 @@ export function BuyerDetailView({ id }: { id: string }) {
           {mandateId && (
             <p className="buyer-detail__mandate-note">
               Public-strategy mandate <code className="mono">{mandateId}</code> created. This is a hypothesis about strategy — not a buyer-confirmed mandate.{' '}
-              <Link to={`/matches?mandate=${mandateId}`} className="btn btn--secondary">Open in Matches</Link>
+              <Link to={`/matches?mandate=${mandateId}`} className="btn btn--secondary">Open in Future simulations</Link>
             </p>
           )}
 

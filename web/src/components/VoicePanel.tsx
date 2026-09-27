@@ -39,7 +39,7 @@ type VoiceSource = 'custom' | 'bundled'
 const voiceError = (cause: unknown) => cause instanceof ApiError ? `${cause.message}${cause.detail ? ` (${JSON.stringify(cause.detail)})` : ''}` : cause instanceof Error ? cause.message : 'The request could not be completed.'
 const micErrorMessage = (cause: unknown) => { const info = describeMicError(cause); return `${info.title}: ${info.message}` }
 
-const DEFAULT_INTRODUCTION = 'Hello, I am an AI assistant calling from the team. Is now a good time to talk?'
+const DEFAULT_INTRODUCTION = "Hi, I'm {name} from Mergero, an AI acquisition representative. I was wondering whether you'd be interested in selling your company?"
 const MIN_SAMPLE_SECONDS = 3
 const MAX_SAMPLE_SECONDS = 30
 const SAMPLE_SCRIPT = 'The quick brown fox jumps over the lazy dog while autumn leaves drift across the quiet garden path, and a distant train whistle echoes through the valley.'
@@ -430,7 +430,7 @@ export function VoicePanel() {
   }
 
   return <section className="voice-panel" aria-labelledby="voice-panel-title">
-    <header className="voice-panel__header"><div><h2 id="voice-panel-title">Browser conversation</h2><p>Speak in your browser using local speech recognition and voice.</p></div><span className={`voice-panel__availability ${capabilities?.browser.available ? 'is-available' : ''}`}>{capabilities ? capabilities.browser.available ? 'Available' : 'Unavailable' : 'Checking…'}</span></header>
+    <header className="voice-panel__header"><div><h2 id="voice-panel-title">Browser conversation</h2><p>Practice acquisition outreach: selling interest, email permission, and future timing.</p></div><span className={`voice-panel__availability ${capabilities?.browser.available ? 'is-available' : ''}`}>{capabilities ? capabilities.browser.available ? 'Available' : 'Unavailable' : 'Checking…'}</span></header>
     <p className="voice-panel__phone">Telephone calling can be connected later.</p>
     {error && <p className="field-error" role="alert">{error}</p>}
     {editing ? <form className="panel voice-form" onSubmit={(event) => void handleSave(event)}>
@@ -440,7 +440,7 @@ export function VoicePanel() {
           <input id="voice-name" value={agentName} onChange={(e) => setAgentName(e.target.value)} required maxLength={120} />
         </div>
         <div className="field-col">
-          <label htmlFor="voice-intro">Introduction <span className="muted small">Must clearly disclose that the speaker is AI.</span></label>
+          <label htmlFor="voice-intro">Introduction <span className="muted small">Use {'{name}'} for the representative’s name. Keep the AI disclosure.</span></label>
           <textarea id="voice-intro" value={introduction} onChange={(e) => setIntroduction(e.target.value)} required maxLength={600} />
         </div>
         <details className="voice-advanced">

@@ -373,7 +373,7 @@ export function FuturesView() {
   return (
     <div className="page">
       <header className="page__header">
-        <h1>Futures</h1>
+        <h1>Owner preferences</h1>
         <p className="page__lede">
           Capture the conditions an owner would need before considering a sale, get an explicit confirmation
           of that exact version, then explore alternatives without changing the confirmed original.

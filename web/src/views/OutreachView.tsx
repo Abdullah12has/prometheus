@@ -519,7 +519,7 @@ function DraftCard({ draft, dir, onReload }: { draft: OutreachDraft; dir: Direct
     if (!window.confirm('Send this exact approved message now? This cannot be undone.')) return
     setBusy('send'); setLocalError(null)
     try {
-      await api.post(`/api/outreach/drafts/${draft.id}/send`)
+      await api.post(`/api/outreach/drafts/${draft.id}/send`, { version: draft.version, content_hash: draft.content_hash })
       push('Message sent.', 'success')
       onReload()
     } catch (cause) { setLocalError(errorMessage(cause, 'Send was blocked.')) }
@@ -658,6 +658,54 @@ function NewDraftForm({ dir, onCreated }: { dir: Directory; onCreated: () => voi
   )
 }
 
+function BatchReview({ drafts, onDone }: { drafts: OutreachDraft[]; onDone: () => void }) {
+  const [reviewed, setReviewed] = useState<string[]>([])
+  const [phase, setPhase] = useState<'review' | 'sending' | 'done'>('review')
+  const [results, setResults] = useState<{ id: string; message: string }[]>([])
+
+  async function approveAndSend() {
+    if (phase !== 'review' || drafts.length === 0 || !drafts.every((draft) => reviewed.includes(draft.id))) return
+    setPhase('sending')
+    for (const draft of drafts) {
+      const preview = { version: draft.version, content_hash: draft.content_hash }
+      let message: string
+      try {
+        await api.post(`/api/outreach/drafts/${draft.id}/approve`, preview)
+        await api.post(`/api/outreach/drafts/${draft.id}/send`, preview)
+        message = 'Sent'
+      } catch (cause) {
+        message = errorMessage(cause, 'Could not complete this message. Check its status before trying again.')
+      }
+      setResults((current) => [...current, { id: draft.id, message }])
+    }
+    setPhase('done')
+  }
+
+  return (
+    <section className="panel" aria-label="Review email batch">
+      <h2>Review {drafts.length} emails</h2>
+      <p>Review each recipient, subject and body. Approve and send authorizes only these exact versions. Changed or blocked messages will not send. Each email has its own result; a failure does not undo emails already sent.</p>
+      {drafts.map((draft) => (
+        <article className="draft-card" key={draft.id}>
+          <DraftPreview draft={draft} />
+          <label>
+            <input type="checkbox" checked={reviewed.includes(draft.id)} disabled={phase !== 'review'}
+              onChange={(event) => setReviewed((current) => event.target.checked ? [...current, draft.id] : current.filter((id) => id !== draft.id))} />
+            I reviewed this email to {draft.recipients.join(', ')}: {draft.subject}
+          </label>
+          {results.filter((result) => result.id === draft.id).map((result) => <p role="status" key={result.id}>{result.message}</p>)}
+        </article>
+      ))}
+      <div className="draft-card__actions">
+        <button type="button" className="btn btn--secondary" disabled={phase === 'sending'} onClick={onDone}>{phase === 'done' ? 'Back to drafts' : 'Cancel'}</button>
+        <button type="button" className="btn btn--primary" disabled={phase !== 'review' || reviewed.length !== drafts.length} onClick={approveAndSend}>
+          {phase === 'sending' ? `Sending (${results.length}/${drafts.length})…` : phase === 'done' ? 'Batch finished' : `Approve and send ${drafts.length} emails`}
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function DraftsTab({ dir }: { dir: Directory }) {
   const [drafts, setDrafts] = useState<OutreachDraft[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -665,9 +713,11 @@ function DraftsTab({ dir }: { dir: Directory }) {
   const [statusFilter, setStatusFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState('')
   const [showNew, setShowNew] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
+  const [batch, setBatch] = useState<OutreachDraft[]>([])
 
   const load = useCallback(() => {
-    setStatus('loading'); setError(null)
+    setStatus('loading'); setError(null); setSelected([])
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (companyFilter) params.set('company_id', companyFilter)
@@ -677,6 +727,8 @@ function DraftsTab({ dir }: { dir: Directory }) {
       .catch((cause) => { setError(errorMessage(cause, 'Could not load drafts.')); setStatus('error') })
   }, [statusFilter, companyFilter, dir.ensureCompany])
   useEffect(load, [load])
+
+  if (batch.length > 0) return <BatchReview drafts={batch} onDone={() => { setBatch([]); load() }} />
 
   return (
     <div className="page" style={{ maxWidth: 'none', padding: 0, gap: 16 }}>
@@ -697,11 +749,26 @@ function DraftsTab({ dir }: { dir: Directory }) {
 
       {showNew && <NewDraftForm dir={dir} onCreated={() => { setShowNew(false); load() }} />}
 
+      {status === 'ready' && drafts.some((draft) => draft.status === 'draft' || draft.status === 'approved') && (
+        <div className="draft-card__actions">
+          <button type="button" className="btn btn--secondary" onClick={() => setSelected(drafts.filter((draft) => draft.status === 'draft' || draft.status === 'approved').map((draft) => draft.id))}>Select all reviewable emails</button>
+          <button type="button" className="btn btn--primary" disabled={selected.length === 0} onClick={() => setBatch(drafts.filter((draft) => selected.includes(draft.id)))}>Review selected ({selected.length})</button>
+        </div>
+      )}
+
       {status === 'loading' && <LoadingBlock label="Loading drafts…" />}
       {status === 'error' && <ErrorBlock message={error ?? 'Something went wrong.'} onRetry={load} />}
       {status === 'ready' && drafts.length === 0 && <EmptyState title="No drafts" description="Create a draft above, or generate one from a thread reply in Inbox." />}
       {status === 'ready' && drafts.length > 0 && (
-        <div className="draft-list">{drafts.map((d) => <DraftCard key={d.id} draft={d} dir={dir} onReload={load} />)}</div>
+        <div className="draft-list">{drafts.map((d) => (
+          <div key={d.id}>
+            {(d.status === 'draft' || d.status === 'approved') && <label>
+              <input type="checkbox" checked={selected.includes(d.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, d.id] : current.filter((id) => id !== d.id))} />
+              Select {d.subject}
+            </label>}
+            <DraftCard draft={d} dir={dir} onReload={load} />
+          </div>
+        ))}</div>
       )}
     </div>
   )
@@ -1224,7 +1291,7 @@ export function OutreachView() {
     <div className="page outreach">
       <header className="page__header">
         <h1>Outreach</h1>
-        <p className="page__lede">Connect Gmail, review replies, and approve every message by hand before it sends. Nothing sends or auto-approves on its own.</p>
+        <p className="page__lede">Connect Gmail, review replies, and approve exact data requests individually or in a batch before sending.</p>
       </header>
 
       <GmailConnectionCard status={gmailStatus} onChange={loadGmailStatus} />

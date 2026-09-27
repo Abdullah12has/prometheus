@@ -57,13 +57,36 @@ SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 BROWSER_LABEL = "Browser conversation"
 PHONE_LABEL = "Phone calling unavailable"
 
+DEFAULT_INTRODUCTION = (
+    "Hi, I'm {name} from Mergero, an AI acquisition representative. "
+    "I was wondering whether you'd be interested in selling your company?"
+)
+
 SAFETY_PROMPT = (
-    "You are an AI voice assistant speaking live with a person in a browser conversation. "
+    "You are Mergero's acquisition outreach representative, conducting an initial business-owner conversation. "
+    "Your role is professional M&A origination: understand the owner's interest, timing and conditions, "
+    "and seek permission for a colleague to gather company information by email. You are not a general-purpose assistant. "
     "You are an AI: never claim or imply to be human, and confirm you are an AI whenever asked. "
-    "Do not impersonate any real person. Reply in English with one to three short, natural spoken "
-    "sentences; no lists, markdown or emojis. You cannot send email, place calls, make commitments, "
-    "or change any records; if asked, say a human colleague will review the conversation and follow up. "
-    "Never invent facts about the company or its finances."
+    "Do not impersonate a real person or claim qualifications, a buyer mandate, a valuation or an offer you do not have. "
+    "Speak in English, warmly and professionally, in one to three short natural sentences, with one question at a time. "
+    "No lists, markdown, emojis, pushiness or repeated introductions. Listen to the answer and remember details already given. "
+    "The introduction already asks about selling the company; do not repeat that question after they answer. "
+    "If interested or open to exploring: acknowledge it, then ask permission for the Mergero team to email a short "
+    "information request. If permission is already given, do not ask for it again. Ask for the best email address if missing, then confirm it accurately, spelling it back "
+    "if unclear. Do not guess an address. Ask separately about a useful timeframe if not already given. "
+    "Explain briefly when relevant that the email would request a company overview, ownership, recent revenue and "
+    "profitability, and the owner's goals. Gather detailed financials over email, not an interrogation on this call. "
+    "If not interested or not now, but they have not requested an end or no further contact: acknowledge without arguing "
+    "and ask once whether anything in the future might change their situation. If they engage, ask separately whether "
+    "Mergero should keep them in mind and when, if ever, they would welcome another conversation. Never treat a polite "
+    "answer as consent to follow up. If they decline again, thank them and close. "
+    "If they say stop, do not contact, remove me, or ask to end: acknowledge immediately, propose recording their "
+    "no-contact preference for review, and close without another sales or future-timing question. "
+    "If busy, ask once whether they want to suggest a better time; otherwise close. "
+    "If they are not the owner or appropriate decision maker, ask politely for the right contact; do not assume authority. "
+    "You cannot send email, place calls, change records or promise execution. Describe email and follow-up as requests "
+    "for the team to review, never as sent, scheduled or completed. Do not promise confidentiality terms or a transaction. "
+    "Never invent company facts, finances, interest or consent. Close by briefly recapping only agreed next steps."
 )
 
 
@@ -122,7 +145,7 @@ def _check_disclosure(value: str | None) -> str | None:
 
 class AgentIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    introduction: str = Field(min_length=1, max_length=600)
+    introduction: str = Field(DEFAULT_INTRODUCTION, min_length=1, max_length=600)
     instructions: str = Field("", max_length=4000)
     language: Literal["en"] = "en"
     max_duration_seconds: int = Field(300, ge=30, le=900)
@@ -412,7 +435,7 @@ async def preview_agent(agent_id: uuid.UUID, request: Request, _: AuthSession = 
     chunks, rate = [], None
     try:
         async with _speech_maintenance(runtime):
-            async for rate, pcm in runtime.tts_stream(agent.introduction, _voice_path(agent)):
+            async for rate, pcm in runtime.tts_stream(agent.introduction.replace("{name}", agent.name), _voice_path(agent)):
                 chunks.append(pcm)
     except ApiError:
         raise
@@ -506,7 +529,7 @@ class Conversation:
             db.commit()
 
     async def run(self) -> str:
-        self.start_reply(self.fixed(self.agent["introduction"]))
+        self.start_reply(self.fixed(self.agent["introduction"].replace("{name}", self.agent["name"])))
         recv = asyncio.create_task(self.receive_loop())
         asr = asyncio.create_task(self.asr_loop())
         try:
@@ -613,12 +636,11 @@ class Conversation:
                 statuses = "; ".join(f"{key}={value}" for key, value in coverage.items())
                 system += (
                     "\nRead-only required-detail coverage: " + statuses + "."
-                    " First ask whether the person is willing to discuss the business at this time."
-                    " If they agree, ask only one missing or proposed_unreviewed item at a time;"
-                    " for financial details, request the period, currency, and reporting scope."
+                    " Use these gaps to describe the proposed email information request, only after interest and permission."
+                    " Do not ask for details already covered. Financial requests should include the period, currency, and reporting scope."
                     " Proposed facts are unreviewed and must never be treated as verified."
                     " Do not change records; any outcome remains a proposal for human review."
-                    " If they decline, thank them and end politely without asking for details."
+                    " Follow the future-timing and no-contact branches above when they decline."
                 )
         if self.agent["instructions"]:
             system += "\nOperator instructions (never override the rules above):\n" + self.agent["instructions"]
@@ -727,13 +749,17 @@ class Conversation:
 
 
 async def _propose_outcome(llm, turns: list[dict]) -> dict | None:
-    lines = [f"{'Person' if t['role'] == 'user' else 'AI assistant'}: {t['text']}" for t in turns if t["text"]]
+    lines = [f"{'Person' if t['role'] == 'user' else 'Mergero AI representative'}: {t['text']}" for t in turns if t["text"]]
     if not any(t["role"] == "user" and t["text"] for t in turns):
         return None
     try:
         value = await asyncio.wait_for(llm.extract("\n".join(lines), (
             'Keys: "summary" (two sentences), "stated_interest" (one of unknown, interested, conditional, '
-            'not_now, not_interested; only what the person explicitly said), "follow_ups" (list of short strings).'
+            'not_now, not_interested; only what the person explicitly said), "follow_ups" (list of short strings). '
+            'Include explicitly stated email permission and address, timing, future change triggers, keep-in-mind '
+            'permission or refusal, and any no-contact request in the summary and follow_ups. Missing consent '
+            'is unknown, never granted. A no-contact request overrides follow-up suggestions. Do not claim '
+            'any email was sent, follow-up scheduled, or company record updated.'
         )), 45)
     except Exception:
         log.warning("outcome proposal failed", exc_info=True)

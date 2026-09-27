@@ -87,6 +87,14 @@ A send is finished only by `UPDATE outreach_dispatches SET state='sent' WHERE id
 | 4xx (incl. 429), connect error / connect timeout | `failed` (Google never accepted it), `502 send_failed` |
 | 5xx, read timeout, dropped connection, 2xx without ids | `delivery_unknown`, `502 delivery_unknown`. Locked until a reconcile finds it |
 
+### Batch review in the UI
+
+In Outreach → Drafts, select reviewable emails and choose **Review selected**. Each exact recipient list, subject and body is displayed. The operator must mark each message reviewed before **Approve and send** becomes available. Each item uses the existing approval and send endpoints; results are reported individually, and failed or uncertain deliveries are not automatically retried. A batch is not atomic: a later failure does not undo earlier sends.
+
+The send endpoint accepts an optional `{version, content_hash}` body. The UI supplies it for individual and batch sends, so an edited and reapproved draft cannot replace the version the operator chose to send. All existing send gates still apply.
+
+Missing-field sequence steps create unapproved drafts after confirmed interest. They cannot use template approval. Public-source research enrichment does not itself initiate email outreach. The assistant can draft requests, but cannot approve or send them.
+
 ### Conversations and replies
 
 | Method | Path | Notes |

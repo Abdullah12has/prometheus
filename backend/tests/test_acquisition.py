@@ -525,6 +525,49 @@ class PageExtractorTests(unittest.TestCase):
 
 class ResearchWebsiteTests(unittest.TestCase):
 
+    def test_crawler_extracts_published_contacts_and_skips_registry_and_billing_ids(self):
+        encoded = bytes([0x12]) + bytes(byte ^ 0x12 for byte in b"cloud@example.fi")
+        cloudflare = encoded.hex()
+        html = f'''<html><body>
+          <p>Write office [at] example [dot] fi; phone +358 40 123 4567.</p>
+          <p>Business ID 0116297-6, OVT 0037 01162976, invoice 12345678901.</p>
+          <a href="MAILTO%3ASales%40Example.fi%2Cinfo%40example.fi%3Fsubject%3DHello">Mail</a>
+          <a href="TEL%3A%2B358401234568">Call</a>
+          <span data-cfemail="{cloudflare}">[email protected]</span>
+          <script type="application/ld+json">{{"@context":"https://schema.org","@type":"Organization",
+            "email":"team@example.fi","telephone":"+358401234569"}}</script>
+          <script>var privateEmail = "tracker@analytics.invalid";</script>
+        </body></html>'''
+        def fetch(url, **kwargs):
+            body = "" if url.endswith("/robots.txt") else html
+            return acquisition.FetchResult(url, url, 200, 'text/plain' if url.endswith('/robots.txt') else 'text/html',
+                {}, body.encode(), body, [], False, acquisition._now())
+        with mock.patch.object(acquisition, 'fetch_public_url', side_effect=fetch):
+            result = acquisition.research_website('https://example.com/', max_pages=1)
+        found = {(c.kind, c.value, c.source) for c in result.contacts}
+        self.assertIn(("email", "office@example.fi", "text"), found)
+        self.assertIn(("email", "sales@example.fi", "mailto_link"), found)
+        self.assertIn(("email", "info@example.fi", "mailto_link"), found)
+        self.assertIn(("email", "cloud@example.fi", "mailto_link"), found)
+        self.assertIn(("email", "team@example.fi", "json_ld"), found)
+        self.assertIn(("phone", "+358401234567", "text"), found)
+        self.assertIn(("phone", "+358401234568", "tel_link"), found)
+        self.assertIn(("phone", "+358401234569", "json_ld"), found)
+        self.assertFalse(any("0116297" in value or "0037" in value or "12345678901" in value
+                             for _, value, _ in found))
+        self.assertFalse(any("analytics.invalid" in value for _, value, _ in found))
+
+    def test_pdf_contact_text_uses_the_shared_extractor(self):
+        def fetch(url, **kwargs):
+            return acquisition.FetchResult(url, url, 200, 'text/plain' if url.endswith('/robots.txt') else 'application/pdf',
+                {}, b'pdf', '' if url.endswith('/robots.txt') else None, [], False, acquisition._now())
+        with mock.patch.object(acquisition, 'fetch_public_url', side_effect=fetch), \
+             mock.patch.object(acquisition, '_web_pdf_text', return_value='Contact pdf@example.fi or +358 40 111 2222'):
+            result = acquisition.research_website('https://example.com/contact.pdf', max_pages=1, include_documents=True)
+        found = {(c.kind, c.value) for c in result.contacts}
+        self.assertIn(("email", "pdf@example.fi"), found)
+        self.assertIn(("phone", "+358401112222"), found)
+
     def test_robots_403_allows_public_page_but_page_403_is_not_evidence(self):
         requested = []
         def fetch(url, **kwargs):
@@ -787,8 +830,7 @@ class ResearchWebsiteTests(unittest.TestCase):
         with mock.patch.object(acquisition, "fetch_public_url", side_effect=fake_fetch):
             research = acquisition.research_website("https://example.com/", max_pages=1)
         phones = {c.value for c in research.contacts if c.kind == "phone"}
-        self.assertIn("+358 40 999 8888", phones)
-        self.assertFalse(any("2024-01-01" in p or "31.12.2023" in p for p in phones))
+        self.assertEqual(phones, {"+358409998888"})
 
 
 # ---------------------------------------------------------------------------

@@ -433,6 +433,53 @@ def test_reply_after_approval_forces_re_review(env):
     assert send(env, follow).json()["error"]["code"] == "conversation_changed"
 
 
+def test_send_is_bound_to_preview_even_if_another_review_approved_an_edit(env):
+    connect(env)
+    co, ct = seed(env)
+    original = approved(env, co, ct)
+    changed = env.c.patch(f"/api/outreach/drafts/{original['id']}", json={"body": "Changed after batch review"}).json()
+    assert approve(env, changed).status_code == 200
+    endpoint = f"/api/outreach/drafts/{original['id']}/send"
+    stale = {"version": original["version"], "content_hash": original["content_hash"]}
+    assert env.c.post(endpoint, json=stale).json()["error"]["code"] == "stale_preview"
+    assert not env.google.called(f"{GMAIL}/messages/send")
+    current = {"version": changed["version"], "content_hash": changed["content_hash"]}
+    assert env.c.post(endpoint, json=current).status_code == 200
+    assert env.c.post(endpoint, json=current).status_code == 409
+    assert len(env.google.called(f"{GMAIL}/messages/send")) == 1
+
+
+def test_scheduled_enrichment_request_waits_for_exact_human_approval(env):
+    co, ct, conv_id = sent_conversation(env)
+    serve_history(env, ("r1", "t1"))
+    serve_message(env, "r1", "Interested, please tell me more")
+    assert env.c.post("/api/gmail/sync").status_code == 200
+    detail = env.c.get(f"/api/outreach/conversations/{conv_id}").json()
+    reply = next(m for m in detail["messages"] if m["direction"] == "inbound")
+    assert env.c.post(f"/api/outreach/conversations/{conv_id}/classify",
+                      json={"message_id": reply["id"], "intent": "interested"}).status_code == 200
+    steps = [STEPS[0], {"kind": "request_missing_fields", "delay_hours": 1}]
+    seq = env.c.post("/api/outreach/sequences", json={"name": "Data requests", "steps": steps}).json()
+    enrollment = env.c.post(f"/api/outreach/sequences/{seq['id']}/enrollments",
+                            json={"company_id": co, "contact_id": ct}).json()
+    with env.db() as db:
+        e = db.get(mail.Enrollment, uuid.UUID(enrollment['id']))
+        e.step_index, e.conversation_id = 1, uuid.UUID(conv_id)
+        e.next_run_at = utcnow() - timedelta(seconds=1)
+        db.commit()
+    result = env.c.post('/api/outreach/run-due').json()['results'][0]
+    assert result['result'] == 'draft_awaiting_review'
+    d = env.c.get(f"/api/outreach/drafts/{result['draft_id']}").json()
+    assert d['kind'] == 'missing_fields' and d['approval'] is None
+    assert send(env, d).json()['error']['code'] == 'not_approved'
+    assert env.c.post('/api/outreach/run-due').json()['results'] == []
+    assert len(env.google.called(f"{GMAIL}/messages/send")) == 1
+    preview = {'version': d['version'], 'content_hash': d['content_hash']}
+    assert approve(env, d).status_code == 200
+    assert env.c.post(f"/api/outreach/drafts/{d['id']}/send", json=preview).status_code == 200
+    assert len(env.google.called(f"{GMAIL}/messages/send")) == 2
+
+
 def test_classifier_rules():
     assert mail.classify_reply("We are not interested, thanks")[0] is mail.ReplyIntent.no
     assert mail.classify_reply("Kiinnostaa, soitetaan")[0] is mail.ReplyIntent.interested
@@ -464,6 +511,8 @@ def test_sequence_validation(env):
     assert env.c.post("/api/outreach/sequences", json={"name": "x", "steps": unknown}).status_code == 422
     no_wait = [STEPS[0], {**STEPS[1], "delay_hours": 0}]
     assert env.c.post("/api/outreach/sequences", json={"name": "x", "steps": no_wait}).status_code == 422
+    auto_enrichment = [STEPS[0], {"kind": "request_missing_fields", "delay_hours": 1, "approval": "template"}]
+    assert env.c.post("/api/outreach/sequences", json={"name": "x", "steps": auto_enrichment}).status_code == 422
 
 
 def test_sequence_first_step_needs_review_template_followup_sends_within_scope(env):

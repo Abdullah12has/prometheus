@@ -78,7 +78,8 @@ test('matches can create a source-backed proposal and an unapproved email draft 
     })
     cleanup.mandate = mandate.id
 
-    await page.getByRole('link', { name: 'Matches', exact: true }).click()
+    await page.getByRole('link', { name: 'Future simulations', exact: true }).click()
+    await page.getByText('Advanced tools', { exact: true }).click()
     await page.getByRole('button', { name: 'Match runs', exact: true }).click()
     await page.getByLabel('Company', { exact: true }).selectOption(ids.seller)
     await page.getByRole('button', { name: 'Run match against active mandates', exact: true }).click()

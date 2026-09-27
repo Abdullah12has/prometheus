@@ -29,3 +29,6 @@ playwright-report/
 .playwright-mcp/
 
 .restore-stage-*/
+
+# Local Google OAuth credentials
+client_secret_*.json

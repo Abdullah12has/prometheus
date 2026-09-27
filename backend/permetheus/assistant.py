@@ -24,6 +24,8 @@ router = APIRouter(prefix="/api/assistant", tags=["assistant"], dependencies=[De
 
 # Only explicitly reversible, operator-directed routes can become model tools.
 ALLOWED = {
+    ("POST", "/api/simulations"), ("GET", "/api/simulations"),
+    ("GET", "/api/simulations/options"), ("GET", "/api/simulations/{run_id}"),
     ("GET", "/api/assistant/search"), ("GET", "/api/assistant/read-source"),
     ("GET", "/api/sources/{source_id}"),
     ("GET", "/api/settings/status"), ("GET", "/api/discovery/schedule"),
