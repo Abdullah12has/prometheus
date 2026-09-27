@@ -14,10 +14,11 @@ from conftest import PASSWORD
 from permetheus import acquisition, research, worker
 from permetheus.app import create_app
 from permetheus.config import Settings
+from permetheus.contacts import ContactIn
 from permetheus.db import init_db, make_sessionmaker
 from permetheus.documents import Document
 from permetheus.models import (
-    Company, CompanyIdentifier, Evidence, FinancialObservation, Job, JobState, ReviewStatus, Source, SourceKind,
+    Company, CompanyIdentifier, Contact, Evidence, FinancialObservation, Job, JobState, ReviewStatus, Source, SourceKind,
 )
 from permetheus.notes import Note
 from permetheus.research_models import (
@@ -144,6 +145,94 @@ def test_known_website_still_searches_configured_searxng_and_keeps_result_source
         assert "web_search" in run.checked and "website" in run.checked
         assert db.get(Job, job.id).state == JobState.succeeded
         assert db.get(Company, company_id).website == "https://acme.fi"  # no merge from search results
+
+
+def test_search_only_contacts_are_saved_with_sources_and_not_duplicated(env, monkeypatch):
+    Session, settings = env
+    url = "https://acmeco.fi/contact"
+    net = Net(monkeypatch, search_results=[("Acmeco Oy", url, "Acmeco Oy contact")],
+              pages={url: "Acmeco Oy hello@acmeco.fi Phone +358 40 123 4567"})
+    original = net.research_website
+    def with_contacts(url, **kwargs):
+        result = original(url, **kwargs)
+        result.contacts = acquisition._contacts_in_text(result.pages[0].text_excerpt, url)
+        return result
+    monkeypatch.setattr(acquisition, "research_website", with_contacts)
+    company_id = seed(Session, website=None, name="Acmeco Oy")
+    job, fencing = claim(Session)
+    enrich(Session, settings, FakeLLM(), job, fencing)
+    with Session() as db:
+        found = list(db.scalars(select(Contact).where(Contact.company_id == company_id)))
+        assert {c.email or c.phone for c in found} == {"hello@acmeco.fi", "+358401234567"}
+        assert all(c.source.url == url and c.source.kind == SourceKind.search_result for c in found)
+        assert all(c.verification.value == "unverified" for c in found)
+        assert any("contact OR" in query for query, _ in net.searches)
+        for contact in found:
+            research._add_discovered_contact(db, db.get(Company, company_id),
+                acquisition.ContactCandidate("email" if contact.email else "phone", contact.email or contact.phone, url, "text"),
+                {url: contact.source})
+        assert db.scalar(select(func.count(Contact.id))) == 2
+
+
+def test_contact_identity_and_directory_scope(env):
+    _, settings = env
+    target = research.Target("Acmeco Ab Oy", "1234567-8", "acmeco.fi", "https://acmeco.fi", "FI")
+    assert not research._company_site("https://acmecofiltration.com", "Acmeco Filtration — Acmeco worldwide", target)
+    assert research._company_site("https://acmeco.fi/contact", "Contact us", target)
+    url = "https://www.asiakastieto.fi/yritykset/fi/acmeco/12345678/rekisteritiedot"
+    text = "Acmeco Ab Oy 1234567-8 Yhteystiedot Puhelin 0401234567 Sähköposti owner@gmail.com Avoimet työpaikat Suomen Asiakastieto support@asiakastieto.fi Puhelin 0102707200"
+    result = crawl(url, [page(url, text)])
+    result.contacts = acquisition._contacts_in_text(text, url)
+    findings = research.Findings()
+    research._keep_pages(settings, findings, result, SourceKind.search_result, target, own_site=False)
+    assert {c.value for c in findings.contacts} == {"owner@gmail.com", "0401234567"}
+    assert research._directory_contacts(page(url.replace("12345678", "99999999"), text), target) == []
+    assert research._directory_contacts(page("https://directory.fi/acmeco", text), target) == []
+    queries = research._search_queries(research.Target('MS "Example" GmbH', None, None, None, "DE"))
+    assert queries[0][0] == "contacts" and queries[0][1].endswith(" Kontakt")
+    assert queries[0][1].count('"') == 2 and "Germany" not in queries[0][1]
+
+
+def test_contact_provenance_prefers_fetched_candidate_but_preserves_snippet_only_email(env):
+    from permetheus.contacts import ContactOut
+    Session, settings = env
+    cid = seed(Session)
+    f = research.Findings()
+    snippet_url, final_url = "https://acme.fi/contact", "https://www.acme.fi/contact/"
+    research._keep_search_snippet(settings, f, acquisition.SearchResultItem("Acme Oy", snippet_url,
+        "Acme Oy sales@acme.fi old@acme.fi", "engine"), NOW, research.Target("Acme Oy", None, "acme.fi", "https://acme.fi"))
+    research._keep(settings, f, SourceKind.search_result, final_url, "Contact us", NOW, "sales@acme.fi", True)
+    f.contacts.append(acquisition.ContactCandidate("email", "sales@acme.fi", final_url, "text"))
+    with Session() as db:
+        sources = [research._source_row(db, fe) for fe in f.fetched]
+        research._save_discovered_contacts(db, db.get(Company, cid), f, sources)
+        found = {c.email: c for c in db.scalars(select(Contact))}
+        assert found["sales@acme.fi"].source.url == final_url
+        assert found["old@acme.fi"].source.title.startswith("Search snippet")
+        assert ContactOut.model_validate(found["sales@acme.fi"]).source.url == final_url
+        research._add_discovered_contact(db, db.get(Company, cid), acquisition.ContactCandidate("email", "missing@acme.fi", "https://missing.fi", "text"), {})
+        assert db.scalar(select(func.count(Contact.id))) == 2
+
+
+def test_contact_attribute_is_retained_in_artifact_and_can_fill_missing_source(env):
+    Session, settings = env
+    cid = seed(Session)
+    url = "https://acme.fi"
+    result = crawl(url, [page(url, "Acme Oy. Short main-text excerpt.")])
+    result.contacts = [acquisition.ContactCandidate("email", "help@acme.fi", url, "mailto_link")]
+    findings = research.Findings()
+    research._keep_pages(settings, findings, result, SourceKind.website,
+                         research.Target("Acme Oy", None, "acme.fi", url), own_site=True)
+    artifact = settings.data_dir / "artifacts" / f"{findings.fetched[0].digest}.txt"
+    assert "email (mailto_link): help@acme.fi" in artifact.read_text()
+    with Session() as db:
+        contact = Contact(company_id=cid, **ContactIn(name="Help desk", email="help@acme.fi").model_dump())
+        db.add(contact)
+        db.flush()
+        source = research._source_row(db, findings.fetched[0])
+        research._save_discovered_contacts(db, db.get(Company, cid), findings, [source])
+        assert contact.source_id == source.id and contact.name == "Help desk"
+        assert db.scalar(select(func.count(Contact.id))) == 1
 
 
 def test_financial_quote_persisted_as_evidence_on_same_source(env, monkeypatch):

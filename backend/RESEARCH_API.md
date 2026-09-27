@@ -46,13 +46,16 @@ internet was searched.
    matches are reported as `blocked`. A business ID that already belongs to
    another company is reported as `registry_business_id_in_use` and is not merged.
 2. Website: a robots-aware, SSRF-safe crawl of the website on file (or the
-   registry website), up to 5 pages.
+   registry website), up to 20 pages, prioritizing contact, legal and financial
+   pages. Public PDFs are supported. Access failures retain their URL and reason.
 3. Web search: always runs, even when a website is known. It queries the
    SearXNG instance at `SEARXNG_URL` (`settings.searxng_url`). If none is
-   configured, the ledger records `web_search_not_configured`. Up to 3 results
-   that mention the target are each fetched through `research_website(url, max_pages=1)`.
-   They are kept as `search_result` sources with stored artifacts. Search
-   results never change the company's identity fields.
+   configured, the ledger records `web_search_not_configured`. Five queries cover
+   contacts, identity, financials, workforce and annual reports. Up to 12 result
+   fetches retain at most 8 successful pages, with at most 3 attempts per host.
+   A likely company site can contribute up to 4 pages, including contact links;
+   other results contribute one. They become `search_result` sources with stored
+   artifacts. Search results never change the company's identity fields.
 4. Extraction: sources are packed into model inputs of at most 35,000 characters
    each, so nothing hits the model client's 40k truncation. The prompt names the
    exact target (name, business ID, domain), tells the model to ignore
@@ -64,6 +67,24 @@ internet was searched.
 5. Every financial is stored as a `FinancialObservation`, plus an `Evidence` row
    `financial.<metric>` holding the exact quote on the same source. Everything
    starts as `proposed`.
+
+Contact collection runs without the language model. It reads published email and
+phone text, mailto/tel links, organization JSON-LD, common email obfuscation and
+PDF text. Search-discovered company pages require a matching domain or exact legal-name
+evidence plus a company-like host. Supported public Finnish directory
+profile sections require the registry ID in the URL and page; shared footers are
+excluded. Search snippets may contribute only email addresses matching the known
+company domain and retain an explicitly labelled snippet source. A fetched-page
+candidate takes precedence over a snippet containing the same address. Source
+artifacts include a labelled record of parsed contact attributes, including ones
+outside the main text excerpt. Repeated discovery can fill a missing contact
+source, but does not overwrite an existing source or verification decision.
+
+Contacts stay `unverified`, are deduplicated per company and channel, and must have
+a source. `ContactOut.source` exposes its URL, title and retrieval date in People.
+Discovery does not establish mailbox deliverability or authority to represent the
+company. The run ledger includes email/phone candidate counts and missing-channel
+reasons; it does not claim every public source was exhausted.
 
 Writes are idempotent. A Source is reused for the same URL and artifact digest,
 and Evidence and financials are skipped if identical ones already exist. Nothing

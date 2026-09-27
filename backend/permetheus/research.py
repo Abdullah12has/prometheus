@@ -87,7 +87,7 @@ from .workspace import JobOut
 LEASE_SECONDS = 300
 WEBSITE_CRAWL_MAX_PAGES = 20
 WEBSITE_CRAWL_TEXT_LIMIT = 20_000
-SEARCH_QUERIES_MAX = 4
+SEARCH_QUERIES_MAX = 5
 SEARCH_FETCH_SUCCESS_LIMIT = 8
 SEARCH_FETCH_ATTEMPT_LIMIT = 12
 SEARCH_FETCH_PER_HOST_LIMIT = 3
@@ -282,12 +282,15 @@ def _keep_search_snippet(settings: Settings, f: Findings, item: acquisition.Sear
                          fetched_at: str, target: Target) -> None:
     text = (item.content or "").strip()[:SEARCH_SNIPPET_LIMIT]
     workforce = r"\b(employees?|staff|headcount|workforce|team size|personnel|henkilöstö\w*|työntekij\w*|henkilöä|anställd\w*|medarbetare|mitarbeiter\w*|beschäftigte\w*)\b"
-    if not text or not re.search(workforce, text, re.I):
+    emails = [c for c in acquisition._contacts_in_text(text, item.url)
+              if c.kind == "email" and target.domain and _email_matches_domain(c.value, target.domain)]
+    if not text or (not re.search(workforce, text, re.I) and not emails):
         return
     _, digest = store_artifact(settings.data_dir, text.encode("utf-8"), ".txt")
     f.fetched.append(Fetched(SourceKind.search_result, item.url,
                              f"Search snippet (page not fetched): {item.title}"[:500], item.engine,
                              fetched_at, digest, text, True, True))
+    f.contacts.extend(acquisition.ContactCandidate(c.kind, c.value, c.source_url, "search_snippet") for c in emails)
 
 
 def _canonical_result_url(url: str) -> str:
@@ -297,19 +300,69 @@ def _canonical_result_url(url: str) -> str:
 
 
 def _search_queries(target: Target) -> list[tuple[str, str]]:
-    name = f'"{target.name}"'
+    name = '"' + target.name.replace('"', ' ').strip() + '"'
     brand = f'"{normalize_name(target.name)}"'
     identity = target.business_id or target.domain
     suffix = f" {identity}" if identity else ""
+    country = {"FI": "Finland", "CH": "Switzerland", "DE": "Germany"}.get(target.country, target.country or "")
+    contact_query = ("contacts", f'site:{target.domain} (contact OR yhteystiedot OR kontakt)' if target.domain
+                     else f'{name} {country} (contact OR yhteystiedot OR kontakt)')
+    if not target.domain and target.country == "DE":
+        # English country terms and multilingual OR clauses hid exact-name local results.
+        contact_query = ("contacts", f"{name} Kontakt")
     if target.country in (None, "FI"):
-        return [("identity", f"{name}{suffix}"),
+        return [contact_query, ("identity", f"{name}{suffix}"),
                 ("financials_fi", f'{name} liikevaihto tilinpäätös henkilöstö{suffix}'),
                 ("workforce", f'{brand} (employees OR henkilöstö OR työntekijät OR LinkedIn OR Glassdoor)'),
                 ("annual_report_fi", f'{brand} (vuosikertomus OR "annual report" OR taloustiedot)')][:SEARCH_QUERIES_MAX]
-    return [("identity", f"{name}{suffix}"),
+    return [contact_query, ("identity", f"{name}{suffix}"),
             ("financials", f'{name} revenue annual accounts financial statements{suffix}'),
             ("workforce", f'{brand} (employees OR headcount OR Mitarbeiter OR LinkedIn OR Glassdoor)'),
             ("annual_report", f'{brand} ("annual report" OR "financial results" OR Jahresabschluss)')][:SEARCH_QUERIES_MAX]
+
+
+def _email_matches_domain(email: str, domain: str) -> bool:
+    host = email.rsplit("@", 1)[-1].lower()
+    return host == domain or host.endswith("." + domain)
+
+
+def _company_site(url: str, text: str, target: Target) -> bool:
+    host = (urllib.parse.urlsplit(url).hostname or "").lower().removeprefix("www.")
+    if target.domain and (host == target.domain or host.endswith("." + target.domain)):
+        return True
+    words = lambda value: " ".join(re.sub(r"[^\w\s]", " ", value.casefold()).split())
+    exact_name = bool(target.name) and f" {words(target.name)} " in f" {words(text)} "
+    if not exact_name:
+        return False
+    brand = re.sub(r"\W", "", normalize_name(target.name))
+    domain_name = re.sub(r"\W", "", host.split(".")[0])
+    return len(brand) >= 5 and (brand in domain_name or domain_name in brand and len(domain_name) >= 5)
+
+
+def _directory_contacts(page: acquisition.PageResult, target: Target) -> list[acquisition.ContactCandidate]:
+    """Only public profile sections with the target registry ID, never directory footers."""
+    parts = urllib.parse.urlsplit(page.url)
+    host = (parts.hostname or "").removeprefix("www.")
+    profiles = {"asiakastieto.fi": "/yritykset/fi/", "proff.fi": "/yrityksen/", "b2b.profinder.fi": "/haku/"}
+    if host not in profiles or not parts.path.startswith(profiles[host]) or not target.business_id:
+        return []
+    compact = lambda value: re.sub(r"[^a-z0-9]", "", value.casefold())
+    if (compact(target.business_id) not in compact(parts.path)
+            or compact(target.business_id) not in compact(page.text_excerpt)):
+        return []
+    text = page.text_excerpt
+    if host == "asiakastieto.fi":
+        # Registry profiles expose a labelled company contact block before recommendations/products.
+        match = re.search(r"Yhteystiedot (.+?)(?:Avoimet työpaikat|Muita saman|Voimassa olevat|Suomen Asiakastieto)", text)
+    elif host == "proff.fi":
+        match = re.search(r"Yhteystiedot (.+?)(?:Yrityksen viralliset tiedot|Lähde: Asiakastieto)", text)
+    else:
+        match = re.search(r"Perustiedot (.+?)(?:Talousprofiilit|Toimipaikat|Muita samankaltaisia)", text)
+    if not match:
+        return []
+    return [acquisition.ContactCandidate(c.kind, c.value, c.source_url, "directory_profile")
+            for c in acquisition._contacts_in_text(match[1][:3000], page.url)
+            if c.kind != "email" or not _email_matches_domain(c.value, host.removeprefix("b2b."))]
 
 
 def _keep_pages(settings: Settings, f: Findings, crawl: acquisition.WebsiteResearch, kind: SourceKind,
@@ -327,7 +380,21 @@ def _keep_pages(settings: Settings, f: Findings, crawl: acquisition.WebsiteResea
             continue
         host = (urllib.parse.urlsplit(page.url).hostname or "").removeprefix("www.")
         identifies = own_site or host == target.domain or _mentions_target(page.text_excerpt, target)
-        _keep(settings, f, kind, page.url, page.title, page.fetched_at, page.text_excerpt, identifies)
+        page_contacts = [contact for contact in crawl.contacts if contact.source_url == page.url]
+        # The main text is bounded; preserve attributes and contacts found beyond that
+        # excerpt as explicitly labelled parser output, not invented verbatim quotes.
+        contact_record = "\n".join(f"{c.kind} ({c.source}): {c.value}" for c in page_contacts)
+        source_text = page.text_excerpt + ("\n\n[Published contacts extracted from this page]\n" + contact_record if contact_record else "")
+        _keep(settings, f, kind, page.url, page.title, page.fetched_at, source_text, identifies)
+        company_site = own_site or _company_site(page.url, page.text_excerpt, target)
+        if not company_site:
+            f.contacts.extend(_directory_contacts(page, target))
+        for contact in page_contacts:
+            if company_site or (identifies and contact.kind == "email" and target.domain
+                                and _email_matches_domain(contact.value, target.domain)):
+                f.contacts.append(contact)
+        if company_site and not own_site:
+            f.checked.append(f"company_contact_page:{page.url}")
 
 
 def _search(target: Target, f: Findings, settings: Settings, beat: Callable[[], None],
@@ -383,12 +450,15 @@ def _search(target: Target, f: Findings, settings: Settings, beat: Callable[[], 
                          attempts, SEARCH_FETCH_ATTEMPT_LIMIT)
             beat()
             try:
-                crawl = acquisition.research_website(item.url, max_pages=1,
+                page_limit = min(4 if _company_site(item.url, f"{item.title} {item.content or ''}", target) else 1,
+                                 SEARCH_FETCH_SUCCESS_LIMIT - successes)
+                crawl = acquisition.research_website(item.url, max_pages=page_limit,
                     text_excerpt_limit=WEBSITE_CRAWL_TEXT_LIMIT, before_fetch=beat, include_documents=True)
             except ValueError as exc:
                 f.blocked.append(f"search_result_unfetchable:{canonical}: {str(exc)[:160]}")
             else:
                 _keep_pages(settings, f, crawl, SourceKind.search_result, target, own_site=False)
+                seen_urls.update(_canonical_result_url(page.url) for page in crawl.pages)
                 successes += sum(not source.is_search_snippet for source in f.fetched[before:])
             if progress:
                 progress("search", f"Checked public result {attempts}; {successes} page(s) fetched", attempts,
@@ -502,7 +572,6 @@ def _gather(target: Target, f: Findings, llm: LanguageModel, settings: Settings,
         if crawl.pages_fetched == 0:
             f.missing.append("website_unreachable")
         _keep_pages(settings, f, crawl, SourceKind.website, target, own_site=True)
-        f.contacts = crawl.contacts
         if link_only_finnish:
             business_ids = _own_site_finnish_ids(f.fetched)
             if not business_ids:
@@ -551,6 +620,14 @@ def _gather(target: Target, f: Findings, llm: LanguageModel, settings: Settings,
     beat()
 
     _search(target, f, settings, beat, progress)
+    for kind in ("email", "phone"):
+        count = len({contact.value for contact in f.contacts if contact.kind == kind})
+        f.checked.append(f"contact_{kind}_candidates:{count}")
+        if not count:
+            f.missing.append(f"contact_{kind}_not_found_in_checked_sources")
+    if progress:
+        progress("search", f"Contact discovery: {len({c.value for c in f.contacts if c.kind == 'email'})} email(s), "
+                 f"{len({c.value for c in f.contacts if c.kind == 'phone'})} phone number(s) found", None, None)
     beat()
 
     if f.fetched and llm.configured:
@@ -801,6 +878,8 @@ def _persist_financial(db: Session, company: Company, fin: dict, f: Findings, so
 def _add_discovered_contact(db: Session, company: Company, contact: acquisition.ContactCandidate,
                             sources_by_url: dict[str, Source]) -> None:
     source = sources_by_url.get(contact.source_url)
+    if source is None:
+        return
     try:
         body = ContactIn(name=contact.value, email=contact.value if contact.kind == "email" else None,
                          phone=contact.value if contact.kind == "phone" else None,
@@ -808,10 +887,22 @@ def _add_discovered_contact(db: Session, company: Company, contact: acquisition.
     except ValidationError:
         return
     same = (Contact.email == body.email) if body.email else (Contact.phone == body.phone)
-    if db.scalar(select(Contact.id).where(Contact.company_id == company.id, same).limit(1)):
+    existing = db.scalar(select(Contact).where(Contact.company_id == company.id, same).limit(1))
+    if existing is not None:
+        if existing.source_id is None:
+            existing.source_id = source.id
         return
     db.add(Contact(company_id=company.id, **body.model_dump()))
     db.flush()
+
+
+def _save_discovered_contacts(db: Session, company: Company, f: Findings, sources: list[Source]) -> None:
+    snippets = {fe.url: source for fe, source in zip(f.fetched, sources) if fe.is_search_snippet}
+    pages = {fe.url: source for fe, source in zip(f.fetched, sources) if not fe.is_search_snippet}
+    # A fetched-page candidate wins even when the search URL redirected. A snippet-only
+    # email must retain its snippet source if the fetched page did not contain it.
+    for contact in sorted(f.contacts, key=lambda c: c.source == "search_snippet"):
+        _add_discovered_contact(db, company, contact, snippets if contact.source == "search_snippet" else pages)
 
 
 def _apply_registry(db: Session, company: Company, record: acquisition.CompanyRecord, source: Source, f: Findings) -> None:
@@ -911,9 +1002,7 @@ def _commit_results(db: Session, *, job: Job, fencing: int, run_id: uuid.UUID, f
                                     if fe.kind == SourceKind.registry and fe.url == f.registry.source_url), None)
             if registry_source is not None:
                 _apply_registry(db, company, f.registry, registry_source, f)
-        own_site = {fe.url: s for fe, s in zip(f.fetched, sources) if fe.kind == SourceKind.website}
-        for contact in f.contacts:
-            _add_discovered_contact(db, company, contact, own_site)
+        _save_discovered_contacts(db, company, f, sources)
         for fact in f.facts:
             _persist_fact(db, company, fact, f, sources)
         for fin in f.financials:

@@ -586,20 +586,27 @@ def _valid_email(value: str) -> str | None:
     value = urllib.parse.unquote(value).strip(" \t\r\n<>\"'.,;:!?()[]{}")
     if not _EMAIL_RE.fullmatch(value) or value.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".pdf")):
         return None
-    if value.lower().split("@", 1)[0] in {"example", "test", "user", "email"}:
+    domain = value.lower().rsplit("@", 1)[1]
+    if value.lower().split("@", 1)[0] in {"firstname.lastname", "first.last", "etunimi.sukunimi", "vorname.nachname", "name.surname"}:
+        return None
+    if domain in {"example.com", "example.org", "example.net", "example.invalid", "example.test"} or domain.endswith((".invalid", ".example", ".test")):
         return None
     return value.lower()
 
 
 def _emails_in_text(text: str) -> list[str]:
-    normalized = re.sub(r"\s*(?:\[at\]|\(at\)|\{at\})\s*", "@", text, flags=re.I)
-    normalized = re.sub(r"\s*(?:\[dot\]|\(dot\)|\{dot\})\s*", ".", normalized, flags=re.I)
+    normalized = re.sub(r"\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\})\s*", "@", text, flags=re.I)
+    normalized = re.sub(r"\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\})\s*", ".", normalized, flags=re.I)
+    normalized = re.sub(r"(?<=[\w.+-])@\s+(?=[A-Za-z0-9-]+\.)", "@", normalized)
     return list(dict.fromkeys(email for match in _EMAIL_RE.findall(normalized)
                               if (email := _valid_email(match))))
 
 
 def _phone_value(value: str) -> str | None:
     value = urllib.parse.unquote(value).split(";", 1)[0].strip()
+    if not re.fullmatch(r"\+?[\d\s().-]+", value):
+        return None
+    value = re.sub(r"^(\+\d{1,3})\s*\(0\)", r"\1", value)
     digits = re.sub(r"\D", "", value)
     if not 7 <= len(digits) <= 15:
         return None
@@ -615,13 +622,18 @@ def _contacts_in_text(text: str, source_url: str) -> list[ContactCandidate]:
         raw = match.group().strip()
         digits = re.sub(r"\D", "", raw)
         context = lowered[max(0, match.start() - 48):match.end() + 24]
+        preceding = lowered[max(0, match.start() - 45):match.start()]
         # A Finnish business ID is seven digits, a hyphen and a check digit.
         if re.fullmatch(r"\d{7}-\d", raw) or digits.startswith("0037") or _looks_like_date(raw):
             continue
         if billing_context.search(context):
             continue
+        if re.search(r"(?:che|uid|vat|ust.?id(?:nr)?|hrb|tax id|register(?:nummer| number)?)\s*[:.\-]?\s*$", preceding):
+            continue
+        if re.search(r"\b(example|e\.g\.|esim\.?|muodossa|beispiel)\s*[:(]?\s*$", lowered[max(0, match.start()-35):match.start()]):
+            continue
         # Plain numbers are too often business IDs, dates, or invoice data.
-        if len(digits) < 9 or (not raw.startswith("+") and not re.search(r"[ ().-]", raw) and not phone_context.search(context)):
+        if len(digits) < 9 or (not raw.startswith("+") and not phone_context.search(context)):
             continue
         value = _phone_value(raw)
         if value:
@@ -651,10 +663,10 @@ def _organization_contacts(payload: object) -> list[tuple[str, str]]:
             types = value.get("@type", [])
             if isinstance(types, str):
                 types = [types]
-            organization = schema_context and any(t in {"Organization", "Corporation", "LocalBusiness",
-                                                            "ProfessionalService", "NGO", "GovernmentOrganization"}
-                                                  for t in types)
-            if organization:
+            contact_entity = schema_context and any(t in {"Organization", "Corporation", "LocalBusiness",
+                                                              "ProfessionalService", "NGO", "GovernmentOrganization",
+                                                              "ContactPoint"} for t in types)
+            if contact_entity:
                 for key, kind in (("email", "email"), ("telephone", "phone")):
                     values = value.get(key, [])
                     if isinstance(values, str):
@@ -684,7 +696,7 @@ def _page_contacts(text: str, source_url: str, extractor: _PageExtractor | None 
         for raw in extractor.json_ld:
             try:
                 values = _organization_contacts(json.loads(raw))
-            except (json.JSONDecodeError, TypeError):
+            except (json.JSONDecodeError, TypeError, RecursionError):
                 continue
             contacts.extend(ContactCandidate(kind, value, source_url, "json_ld") for kind, value in values)
     return _unique_candidates(contacts)
@@ -714,9 +726,16 @@ class _PageExtractor(HTMLParser):
         self._base_seen = False
         self.json_ld: list[str] = []
         self._json_ld_depth = 0
+        self._hidden_tags: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
+        hidden = ("hidden" in attributes or "displaynone" in (attributes.get("class") or "").split()
+                  or re.search(r"display\s*:\s*none", attributes.get("style") or "", re.I))
+        if self._hidden_tags or hidden:
+            if tag not in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
+                self._hidden_tags.append(tag)
+            return
         if tag == "script" and (attributes.get("type") or "").lower() == "application/ld+json":
             self._json_ld_depth += 1
             return
@@ -741,7 +760,10 @@ class _PageExtractor(HTMLParser):
             href = attributes.get("href")
             if not href:
                 return
-            href = urllib.parse.unquote(href.strip())
+            href = href.strip()
+            decoded = urllib.parse.unquote(href)
+            if decoded.partition(":")[0].lower() in {"mailto", "tel"}:
+                href = decoded
             scheme, _, address = href.partition(":")
             if scheme.lower() == "mailto":
                 recipients = urllib.parse.unquote(address.split("?", 1)[0]).split(",")
@@ -754,6 +776,10 @@ class _PageExtractor(HTMLParser):
                     self.links.append(absolute)
 
     def handle_endtag(self, tag: str) -> None:
+        if self._hidden_tags:
+            if tag in self._hidden_tags:
+                del self._hidden_tags[len(self._hidden_tags) - 1 - self._hidden_tags[::-1].index(tag):]
+            return
         if tag == "script" and self._json_ld_depth:
             self._json_ld_depth -= 1
         elif tag in self._SKIPPED_TAGS and self._skip_depth:
@@ -762,6 +788,8 @@ class _PageExtractor(HTMLParser):
             self._in_title = False
 
     def handle_data(self, data: str) -> None:
+        if self._hidden_tags:
+            return
         if self._json_ld_depth:
             self.json_ld.append(data)
             return

@@ -11,7 +11,7 @@ from .db import get_db, get_or_404, record_activity
 from .errors import ApiError
 from .identity import normalize_email, normalize_phone
 from .models import Company, Contact, ContactRole, PersonRole, Verification
-from .provenance import require_source
+from .provenance import SourceOut, require_source
 
 router = APIRouter(prefix="/api", tags=["contacts"], dependencies=[Depends(require_session)])
 
@@ -49,6 +49,7 @@ class ContactOut(BaseModel):
     phone: str | None
     verification: Verification
     source_id: uuid.UUID | None
+    source: SourceOut | None = None
     created_at: datetime
 
 

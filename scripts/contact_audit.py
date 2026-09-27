@@ -10,10 +10,14 @@ import json
 from pathlib import Path
 import sys
 import time
+import uuid
 
 from permetheus.config import Settings
 from permetheus.contacts import ContactIn
 from permetheus import research
+from permetheus.db import make_engine, make_sessionmaker, record_activity
+from permetheus.models import Company, Contact
+from sqlalchemy import select, func
 
 
 def load_snapshot(name, path):
@@ -30,12 +34,16 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--baseline-dir', type=Path)
     parser.add_argument('--workers', type=int, default=3, choices=range(1, 5))
+    parser.add_argument('--save-contacts', action='store_true', help='Save sourced, unverified candidates to the local database')
     args = parser.parse_args()
     module = research
     if args.baseline_dir:
         module = load_snapshot('research', args.baseline_dir / 'research_baseline.py')
         module.acquisition = load_snapshot('acquisition', args.baseline_dir / 'acquisition_baseline.py')
     settings = Settings()
+    if args.baseline_dir and args.save_contacts:
+        parser.error('Baseline runs are read-only')
+    Session = make_sessionmaker(make_engine(settings.database_url)) if args.save_contacts else None
     manifest = json.loads(args.manifest.read_text())
     class NoModel:
         configured = False
@@ -56,7 +64,22 @@ def main():
                 continue
             contacts.append({'kind': candidate.kind, 'value': getattr(valid, candidate.kind),
                              'source_url': candidate.source_url, 'method': candidate.source})
-        return {**row, 'elapsed_seconds': round(time.monotonic()-started, 1),
+        added = 0
+        if Session is not None and error is None:
+            with Session() as db:
+                company = db.get(Company, uuid.UUID(row['id']))
+                if company is None:
+                    raise ValueError('Sample company no longer exists')
+                count = select(func.count(Contact.id)).where(Contact.company_id == company.id)
+                before = db.scalar(count)
+                sources = [module._source_row(db, fetched) for fetched in findings.fetched]
+                module._save_discovered_contacts(db, company, findings, sources)
+                db.flush()
+                added = db.scalar(count) - before
+                record_activity(db, 'research.contact_audit', f'Contact discovery checked {company.name}', company.id,
+                                added=added, checked=findings.checked, errors=findings.errors)
+                db.commit()
+        return {**row, 'elapsed_seconds': round(time.monotonic()-started, 1), 'contacts_saved': added,
                 'contacts': contacts, 'email_count': len({x['value'] for x in contacts if x['kind']=='email'}),
                 'phone_count': len({x['value'] for x in contacts if x['kind']=='phone'}),
                 'source_count': len(findings.fetched), 'checked': findings.checked,

@@ -531,11 +531,13 @@ class ResearchWebsiteTests(unittest.TestCase):
         html = f'''<html><body>
           <p>Write office [at] example [dot] fi; phone +358 40 123 4567.</p>
           <p>Business ID 0116297-6, OVT 0037 01162976, invoice 12345678901.</p>
+          <p>Revenue 2023 2024 2025 2026. Format: firstname.lastname@example.fi</p>
           <a href="MAILTO%3ASales%40Example.fi%2Cinfo%40example.fi%3Fsubject%3DHello">Mail</a>
           <a href="TEL%3A%2B358401234568">Call</a>
           <span data-cfemail="{cloudflare}">[email protected]</span>
           <script type="application/ld+json">{{"@context":"https://schema.org","@type":"Organization",
-            "email":"team@example.fi","telephone":"+358401234569"}}</script>
+            "email":"team@example.fi","contactPoint":{{"@type":"ContactPoint",
+            "telephone":"+358401234569"}}}}</script>
           <script>var privateEmail = "tracker@analytics.invalid";</script>
         </body></html>'''
         def fetch(url, **kwargs):
@@ -545,6 +547,8 @@ class ResearchWebsiteTests(unittest.TestCase):
         with mock.patch.object(acquisition, 'fetch_public_url', side_effect=fetch):
             result = acquisition.research_website('https://example.com/', max_pages=1)
         found = {(c.kind, c.value, c.source) for c in result.contacts}
+        self.assertFalse(any(c.value == 'firstname.lastname@example.fi' for c in result.contacts))
+        self.assertFalse(any(c.kind == 'phone' and c.value.startswith('2023') for c in result.contacts))
         self.assertIn(("email", "office@example.fi", "text"), found)
         self.assertIn(("email", "sales@example.fi", "mailto_link"), found)
         self.assertIn(("email", "info@example.fi", "mailto_link"), found)
@@ -644,7 +648,7 @@ class ResearchWebsiteTests(unittest.TestCase):
                     "</body></html>"
                 )
             elif url == "https://example.com/public":
-                html = "<html><body>Contact info@example.com or +358 40 999 8888</body></html>"
+                html = "<html><body>Contact info@example.fi or +358 40 999 8888</body></html>"
             else:
                 raise AssertionError(f"unexpected fetch of {url}")
             return acquisition.FetchResult(
@@ -670,7 +674,7 @@ class ResearchWebsiteTests(unittest.TestCase):
         self.assertIn("https://example.com/public", research.internal_links)
         self.assertIn("https://other.example/x", research.external_links)
         emails = {c.value for c in research.contacts if c.kind == "email"}
-        self.assertIn("info@example.com", emails)
+        self.assertIn("info@example.fi", emails)
 
     def test_reports_fetch_errors_without_aborting_crawl(self):
         def fake_fetch(url, timeout=10.0, **kwargs):
@@ -1009,6 +1013,16 @@ class SearchWebTests(unittest.TestCase):
             cooled = acquisition.search_web("other oy")
         self.assertIn("retry in 120 seconds", cooled.error)
         self.assertEqual(urlopen.call_count, 1)
+
+
+def test_visible_email_ignores_hidden_obfuscation_and_example_phone():
+    extractor = acquisition._PageExtractor("https://company.fi/contact")
+    extractor.feed('owner@<span class="displaynone">null</span>gmail.com '
+                   '<span style="display: none"><b>fake@company.fi</b></span>'
+                   ' Puhelinnumero (muodossa 0401234567). Phone +358 40 555 8888')
+    contacts = acquisition._page_contacts(extractor.text, extractor.base_url, extractor)
+    assert {c.value for c in contacts} == {"owner@gmail.com", "+358405558888"}
+    assert acquisition._phone_value("abc123456789") is None
 
 
 if __name__ == "__main__":

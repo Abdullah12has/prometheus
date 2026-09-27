@@ -121,6 +121,7 @@ export interface Contact {
   phone: string | null
   verification: string
   source_id: string | null
+  source?: Source | null
   created_at: string
 }
 

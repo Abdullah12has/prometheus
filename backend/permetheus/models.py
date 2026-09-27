@@ -225,6 +225,7 @@ class Contact(IdMixin, Base):
     email: Mapped[str | None] = mapped_column(String(320))
     phone: Mapped[str | None] = mapped_column(String(20))
     verification: Mapped[Verification] = mapped_column(enum_col(Verification), default=Verification.unverified)
+    source: Mapped[Source | None] = relationship()
 
 
 class Job(IdMixin, Base):
