@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const company = { id: 'seller', name: 'Research Seller', country: 'FI', status: 'provisional', identifiers: [] }
-const scenarios = ['Sell the whole company', 'Keep a 25% stake', 'Keep the team in place'].map((label, index) => ({ id: String(index), label, hypothetical: true, status: 'research_needed', checks: [{ origin: 'owner', key: 'structure', result: 'unknown', detail: 'Buyer has not confirmed this structure' }], questions: ['Confirm buyer terms'] }))
+const scenarios = ['Sell the whole company', 'Keep a 25% stake', 'Keep the team in place'].map((label, index) => ({ id: String(index), label, hypothetical: true, status: 'research_needed', checks: [{ origin: 'owner', key: 'structure', result: 'unknown', detail: 'mandate is silent on max_rollover_pct' }], questions: ['Confirm buyer terms'] }))
 const run = { id: 'run-1', company_id: 'seller', company_name: company.name, created_at: '2026-09-27T12:00:00Z', buyers_evaluated: 20, buyers_not_evaluated: 3, rejected_recommendations: 0, scope: 'Sourced buyers', limitations: ['No confirmed interest'], results: [{ buyer_id: 'buyer', buyer_name: 'Research Buyer', reason: 'Both published sources discuss industrial software.', interpretation: 'Exploratory interpretation', status: 'research_needed', sources: [{ ref: 'E1', title: 'Buyer strategy', url: 'https://example.org/strategy', field: 'buyer_sector', value: 'Industrial software', excerpt: 'We invest in industrial software.', review_status: 'proposed', retrieved_at: null }], questions: ['Confirm owner interest'], scenarios, decision_tree: [{ question: 'Is the owner open to a sale?', state: 'unknown', yes: 'Review terms', no: 'Stop: no outreach', unknown: 'Ask the owner' }] }] }
 
 test('a novice runs all scenarios in one action, sees sources and explores the tree', async ({ page }) => {
@@ -12,13 +12,17 @@ test('a novice runs all scenarios in one action, sees sources and explores the t
   await page.route('**/api/simulations', route => route.fulfill({ json: route.request().method() === 'POST' ? run : [] }))
   await page.goto('/matches')
   await expect(page.getByRole('heading', { name: 'Future simulations', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Simulation workflow' })).toContainText('Ready to explore')
   await expect(page.getByRole('button', { name: 'Explore futures', exact: true })).toBeDisabled()
   await page.getByRole('button', { name: /Research Seller/ }).click()
   await page.getByRole('button', { name: 'Explore futures', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Possible futures for Research Seller' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Simulation workflow' })).toContainText('Results saved')
+  await expect(page.getByRole('region', { name: 'Simulation workflow' })).toContainText('20 profiles evaluated')
   await expect(page.getByRole('link', { name: 'Buyer strategy' })).toHaveAttribute('href', 'https://example.org/strategy')
   await page.getByRole('button', { name: /Keep a 25% stake/ }).click()
   await expect(page.getByText('Keep a 25% stake — hypothetical')).toBeVisible()
+  await expect(page.locator('.future-sim__branch-detail')).toContainText('how much equity the owner can retain')
   await page.getByText('View the full decision tree').click()
   await expect(page.getByText('Stop: no outreach')).toBeVisible()
   await expect(page.getByText('20 sourced profiles compared', { exact: false })).toBeVisible()
@@ -37,6 +41,7 @@ test('missing research gives an actionable error instead of a fake match', async
   await expect(page.getByRole('alert')).toContainText('Research this company first.')
   await expect(page.getByRole('link', { name: 'Review company research' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Explore futures', exact: true })).toBeEnabled()
+  await expect(page.getByRole('region', { name: 'Simulation workflow' })).toContainText('Run needs attention')
 })
 
 test('saved real-data simulation opens with its sources and decision branches', async ({ page }) => {
