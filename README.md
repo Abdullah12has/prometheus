@@ -29,6 +29,8 @@ See [local setup and recovery](LOCAL_SETUP.md) for the pinned speech model, back
 
 For a research demo, open a company and select **Refresh research**. The activity card shows queue state, identity lookup, website crawl, public search, extraction and evidence saving. Source counts and timestamped events come from the actual worker and survive a reload. Interactive jobs take the next free slot ahead of bulk research. Coverage distinguishes missing information, proposed findings and reviewed facts.
 
+Workforce findings appear on the company Overview with source links and supporting quotes. Financials separates public summaries from observations with verified reporting dates and units. Open **Source checks and research gaps** for the checked URLs and specific failure reasons. Rejected financial observations remain available through **Show rejected observations**.
+
 ## Connections
 
 The language model uses an OpenAI-compatible gateway configured with `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL`. `LLM_REASONING_EFFORT=none` was verified with the configured Gemini 2.5 Flash gateway for quick voice responses. Change or remove this value if another model does not support it.
@@ -49,6 +51,8 @@ RUN_VOICE_E2E=1 RUN_NOTES_E2E=1 npx playwright test tests/voice.spec.ts tests/vo
 RUN_RESEARCH_E2E=1 npx playwright test tests/research.spec.ts
 # Real company website/search/model enrichment from the UI; requires imported Vincit Oyj:
 RUN_ENRICHMENT_E2E=1 npx playwright test tests/enrichment-ui.spec.ts
+# Set ENRICHMENT_COMPANY to another existing company. For a company known to publish these:
+# REQUIRE_WORKFORCE=1 REQUIRE_FINANCIAL_SUMMARY=1 also check the saved findings and UI cards.
 # Optional populated-country UI check; requires at least 100 imported Swiss companies:
 RUN_REGISTRY_E2E=1 npx playwright test tests/discovery-ui.spec.ts
 ```

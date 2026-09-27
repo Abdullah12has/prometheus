@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 
 test('company enrichment starts from the UI and displays real progress and saved results', async ({ page }) => {
   test.skip(process.env.RUN_ENRICHMENT_E2E !== '1', 'Uses the real imported company, websites and configured model')
-  test.setTimeout(180_000)
+  test.setTimeout(360_000)
   const password = readFileSync(new URL('../../.env', import.meta.url), 'utf8').split('\n')
     .find(line => line.startsWith('ADMIN_PASSWORD='))?.slice('ADMIN_PASSWORD='.length)
   if (!password) throw new Error('Local ADMIN_PASSWORD is required')
@@ -13,8 +13,9 @@ test('company enrichment starts from the UI and displays real progress and saved
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible()
-  const companies = await (await page.request.get('/api/companies?q=Vincit%20Oyj&limit=20')).json()
-  const company = companies.items.find((item: { name: string }) => item.name === 'Vincit Oyj')
+  const targetName = process.env.ENRICHMENT_COMPANY ?? 'Vincit Oyj'
+  const companies = await (await page.request.get(`/api/companies?q=${encodeURIComponent(targetName)}&limit=20`)).json()
+  const company = companies.items.find((item: { name: string }) => item.name === targetName)
   expect(company, 'requires the real Finnish register import').toBeTruthy()
   await page.goto(`/companies/${company.id}`)
   await expect(page.getByRole('button', { name: 'Refresh research', exact: true })).toBeEnabled({ timeout: 90_000 })
@@ -36,7 +37,7 @@ test('company enrichment starts from the UI and displays real progress and saved
       capturedRunning = true
     }
     return finalJob?.state
-  }, { timeout: 150_000, intervals: [250, 500, 1000] }).toBe('succeeded')
+  }, { timeout: 300_000, intervals: [250, 500, 1000] }).toBe('succeeded')
   expect(finalJob?.progress?.phase).toBe('completed')
   expect(finalJob?.progress?.source_count).toBeGreaterThan(0)
   const phases = finalJob!.progress!.events.map(event => event.phase)
@@ -46,6 +47,26 @@ test('company enrichment starts from the UI and displays real progress and saved
   await expect(page.getByRole('heading', { name: company.name, exact: true })).toBeVisible()
   const detail = await (await page.request.get(`/api/companies/${company.id}`)).json()
   expect(detail.evidence.length).toBeGreaterThan(0)
+  if (process.env.REQUIRE_WORKFORCE === '1') {
+    expect(detail.evidence.some((item: { field: string }) => item.field === 'employee_count_text')).toBeTruthy()
+    await expect(page.getByRole('region', { name: 'Workforce information', exact: true })).toBeVisible()
+  }
+  if (process.env.REQUIRE_FINANCIAL_SUMMARY === '1') {
+    expect(detail.evidence.some((item: { field: string }) => item.field === 'financial_summary_text')).toBeTruthy()
+    await page.getByRole('button', { name: 'Financials', exact: true }).click()
+    const summaries = page.getByRole('region', { name: 'Public financial summaries', exact: true })
+    await expect(summaries).toBeVisible()
+    await expect(summaries.getByRole('link').first()).toBeVisible()
+    const rejectedToggle = page.getByLabel('Show rejected observations', { exact: true })
+    if (await rejectedToggle.count()) {
+      await expect(page.locator('.record-list__item').filter({ hasText: /· rejected/ })).toHaveCount(0)
+      await rejectedToggle.check()
+      await expect(page.locator('.record-list__item').filter({ hasText: /· rejected/ }).first()).toBeVisible()
+      await rejectedToggle.uncheck()
+    }
+    await page.screenshot({ path: '../data/screenshots/enrichment-financials.png', fullPage: true })
+    await page.getByRole('button', { name: 'Overview', exact: true }).click()
+  }
   await activity.scrollIntoViewIfNeeded()
   await page.screenshot({ path: '../data/screenshots/enrichment-complete.png', fullPage: true })
   await page.reload()

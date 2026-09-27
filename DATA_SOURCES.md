@@ -22,6 +22,18 @@ Public search providers can return quotas or CAPTCHA challenges. Search requests
 
 Downloaded archives, database contents, recordings and credentials remain in private local storage and are excluded from Git. The application reports imported counts and enrichment status independently.
 
+## Company enrichment
+
+The research pass prioritizes company, team, contact, legal/invoicing, investor and financial-report pages. It reads up to 20 company-site pages, including accessible text PDFs within the download, page and text limits. Anchor fragments are deduplicated so several navigation links to the same page do not waste the page budget. Scanned or oversized PDFs are reported as gaps. This is bounded research, not an exhaustive website archive.
+
+Four focused public-search queries cover identity, financial information and workforce evidence. Research continues after an inaccessible result, within 12 attempts, eight successful pages and three attempts per host. Each checked URL and source-specific failure is retained. The crawler supplements the system CA store with the installed current CA bundle, while keeping certificate and hostname validation enabled. It follows [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html#name-unavailable-status) for unavailable robots files (4xx); rate limiting, server/network failures and published disallow rules still stop that source. Non-200 page bodies never become evidence or contacts.
+
+Workforce ranges and public search snippets are stored as source observations, not exact annual employee totals. Snippet titles and extraction methods explicitly say that the page was not fetched. Snippets cannot support financial observations. [LinkedIn explains](https://www.linkedin.com/help/linkedin/answer/a565340) that counts derived from member profiles can differ from actual employee counts; its [organization API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/organizations/organization-lookup-api) restricts staff-count access. There is no connected licensed LinkedIn or Glassdoor API. Accessible official company pages, reports and attributed public business-information pages are preferred.
+
+Where a source states financial information but its exact reporting interval or monetary units cannot be verified, research preserves the original cited passage instead of inventing dates or amounts. Structured web financials require explicit full dates (ISO or European numeric dates) and an unscaled amount next to an ISO currency code. Scaled amounts, symbols and ambiguous number formats remain summaries for review. Those summaries appear in Financials, separately from dated financial observations. Owner intent remains dependent on a confirmed attributable statement.
+
+For link-only Finnish intake, a checksum-valid Business ID found on the company's own site can resolve the PRH record only when the registry website matches the supplied domain. Multiple identifiers, domain conflicts and identifiers already attached to another company require review. Swiss registry and German LEI imports retain their existing jurisdiction-specific scope; no universal employee-count field is assumed in registry data.
+
 
 ## Buyer discovery
 

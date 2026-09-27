@@ -10,6 +10,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.4",
     "httpx>=0.27",
+    "certifi>=2026.6.17",
     "python-multipart>=0.0.20",
     "websockets>=14",
     "cryptography>=50.0.1",

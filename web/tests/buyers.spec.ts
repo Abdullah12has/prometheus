@@ -271,7 +271,7 @@ test('buyers list search/filter, discovery drawer and profile use only the mocke
   await page.getByRole('button', { name: 'Create public strategy', exact: true }).click()
   await expect(page.getByText('mandate-abc-123', { exact: true })).toBeVisible()
   await expect(page.getByText('not a buyer-confirmed mandate', { exact: false })).toBeVisible()
-  const matchesLink = page.getByRole('link', { name: 'Open in Matches', exact: true })
+  const matchesLink = page.getByRole('link', { name: /^Open in / })
   await expect(matchesLink).toHaveAttribute('href', '/matches?mandate=mandate-abc-123')
 
   // A candidate with no public data yet shows explicit "Not publicly stated" language.

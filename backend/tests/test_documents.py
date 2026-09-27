@@ -226,6 +226,8 @@ class DocumentTests(unittest.TestCase):
         pages = _pdf_pages(source)
         self.assertEqual(len(pages), 1)
         self.assertIn("Revenue was EUR 123.45.", pages[0])
+        from permetheus.acquisition import _web_pdf_text
+        self.assertEqual(_web_pdf_text(bytes(pdf), 2000), "[PDF page 1] Revenue was EUR 123.45.")
         findings, _ = asyncio.run(_extract_pdf(pages, FakeLLM()))
         self.assertEqual(findings[0]["quote"], "Revenue was EUR 123.45.")
 

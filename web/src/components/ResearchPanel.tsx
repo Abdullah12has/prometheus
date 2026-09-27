@@ -75,7 +75,7 @@ export function ResearchPanel({ companyId, onUpdated }: { companyId: string; onU
       {activeJobs.map((job) => <div className="research-job" key={job.id}><span>{job.state === 'queued' ? 'Starts when a research worker is free. Interactive jobs take priority over bulk research.' : 'You can leave this page; research continues in the background.'}</span><button className="research-button" onClick={() => void jobAction(job.id, 'cancel')} disabled={busy}>Cancel research</button>{job.last_error && <p>{job.last_error}</p>}</div>)}
       {latest ? <><div className="research-run-status"><strong>{active && latest.job_id !== displayedJob?.id ? 'Previous run' : humanize(latest.status)}</strong><time>{new Date(latest.started_at).toLocaleString()}</time></div><p className="research-disclaimer">Coverage reflects sources checked in this run; it does not establish that all available information was found.</p>
         {coverage && <RequiredCoverage items={coverage.required} scopeNote={coverage.scope_note} />}
-        <details className="research-details" open={Boolean(latest.blocked.length || latest.errors.length)}><summary>Source checks and research gaps</summary><CoverageList title="Checked" items={latest.checked} empty="No sources checked yet." /><CoverageList title="Missing" items={latest.missing} empty="No missing items were reported by this run." /><CoverageList title="Blocked" items={latest.blocked} empty="No blocked items were reported by this run." /><CoverageList title="Errors" items={latest.errors} empty="No errors reported." isError /><CoverageList title="Suggested next steps" items={latest.recommendations} empty="No next steps suggested." /></details>
+        <details className="research-details"><summary>Source checks and research gaps · {latest.checked.length} checks · {latest.blocked.length} blocked · {latest.errors.length} errors</summary><CoverageList title="Checked" items={latest.checked} empty="No sources checked yet." /><CoverageList title="Missing" items={latest.missing} empty="No missing items were reported by this run." /><CoverageList title="Blocked" items={latest.blocked} empty="No blocked items were reported by this run." /><CoverageList title="Errors" items={latest.errors} empty="No errors reported." isError /><CoverageList title="Suggested next steps" items={latest.recommendations} empty="No next steps suggested." /></details>
       </> : !active && <p className="research-muted">No research run yet. Start one to check the registry and available company sources.</p>}
       {!active && !canRetry && jobs.find((job) => job.kind === 'company.enrich' && job.state === 'failed')?.last_error && <p className="research-error">{jobs.find((job) => job.kind === 'company.enrich' && job.state === 'failed')?.last_error}</p>}
       {canRetry && !active && <div className="research-job"><span>Previous research {canRetry.state}</span><button type="button" className="research-button" onClick={() => void jobAction(canRetry.id, 'retry')} disabled={busy}>Retry</button>{canRetry.last_error && <p>{canRetry.last_error}</p>}</div>}
@@ -111,7 +111,7 @@ function ResearchActivity({ job }: { job: Job }) {
 }
 
 function CoverageList({ title, items, empty, isError = false }: { title: string; items: string[]; empty: string; isError?: boolean }) {
-  return <section className={`research-coverage ${isError && items.length ? 'is-error' : ''}`}><h3>{title} <span>{items.length}</span></h3>{items.length ? <ul>{items.map((item, index) => <li key={`${item}-${index}`}>{humanize(item)}</li>)}</ul> : <p>{empty}</p>}</section>
+  return <section className={`research-coverage ${isError && items.length ? 'is-error' : ''}`}><h3>{title} <span>{items.length}</span></h3>{items.length ? <ul>{items.map((item, index) => <li key={`${item}-${index}`}>{item.split(/(https?:\/\/[^\s]+)/g).map((part, partIndex) => /^https?:\/\//.test(part) ? <a key={partIndex} href={part.replace(/:$/, '')} target="_blank" rel="noreferrer">{part.replace(/:$/, '')}</a> : humanize(part))}</li>)}</ul> : <p>{empty}</p>}</section>
 }
 
 function RequiredCoverage({ items, scopeNote }: { items: ResearchCoverage['required']; scopeNote: string }) {
@@ -134,6 +134,6 @@ function RequiredCoverage({ items, scopeNote }: { items: ResearchCoverage['requi
       <span>{labels[key] ?? humanize(key)}</span>
       <strong className={`coverage-status coverage-status--${status}`}>{statusLabels[status] ?? humanize(status)}</strong>
     </li>)}</ul>
-    <p>{scopeNote}</p>
+    <p>{scopeNote} Financial entries require reporting dates; workforce ranges and undated summaries appear separately.</p>
   </section>
 }

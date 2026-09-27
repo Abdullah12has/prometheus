@@ -31,6 +31,7 @@ would make a local SearXNG deployment unreachable by design.
 from __future__ import annotations
 
 import ipaddress
+from io import BytesIO
 import json
 import math
 import re
@@ -48,6 +49,8 @@ from html.parser import HTMLParser
 from typing import Callable
 from http.client import HTTPConnection, HTTPException
 from urllib.robotparser import RobotFileParser
+
+import certifi
 
 USER_AGENT = "Permetheus-Acquisition/0.1"
 DEFAULT_MAX_BYTES = 5 * 1024 * 1024
@@ -354,6 +357,8 @@ class _PinnedHTTPConnection(HTTPConnection):
             sock.connect((self._address, self.port))
             if self._tls:
                 context = ssl.create_default_context()
+                # The OS bundle can lag behind current public CA roots. Retain verification.
+                context.load_verify_locations(cafile=certifi.where())
                 self.sock = context.wrap_socket(sock, server_hostname=self.host)
             else:
                 self.sock = sock
@@ -509,6 +514,10 @@ def fetch_public_url(
                         value = response.getheader(name)
                         if value is not None:
                             headers[name.lower()] = value
+            except ssl.SSLCertVerificationError as exc:
+                raise FetchError("tls_certificate_invalid") from exc
+            except TimeoutError as exc:
+                raise FetchError("request_timed_out") from exc
             except (HTTPException, ssl.SSLError, OSError) as exc:
                 raise FetchError("upstream_failed") from exc
         finally:
@@ -638,7 +647,7 @@ class _PageExtractor(HTMLParser):
 
     @property
     def text(self) -> str:
-        return " ".join(self._text_parts)
+        return " ".join(" ".join(self._text_parts).split())
 
 
 @dataclass
@@ -675,10 +684,10 @@ class WebsiteResearch:
 
 def _load_robots(scheme_host: str, timeout: float) -> tuple[RobotFileParser | None, str | None]:
     """Fetch and parse robots.txt. Returns ``(parser, None)`` when the policy
-    is known -- either a parsed robots.txt, or a confirmed 404 (no robots.txt
-    published, permissive by convention). Returns ``(None, reason)`` when the
+    is known -- either a parsed robots.txt, or an unavailable 4xx response
+    (RFC 9309 section 2.3.1.3). Rate limits remain a reason to stop. Returns ``(None, reason)`` when the
     policy could *not* be determined (DNS/connect/timeout failure, or any
-    non-200/404 status such as a 5xx): crawling a host without knowing its
+    rate limit or server error): crawling a host without knowing its
     robots policy is not permitted, so the caller must skip that host with an
     explicit reason instead of silently defaulting to permissive."""
     try:
@@ -688,18 +697,46 @@ def _load_robots(scheme_host: str, timeout: float) -> tuple[RobotFileParser | No
             allowed_content_types=DEFAULT_ALLOWED_CONTENT_TYPES,
         )
     except FetchError as exc:
-        return None, f"robots_fetch_failed: {exc}"
-    if result.status == 404:
+        return None, f"{scheme_host}/robots.txt: robots_fetch_failed: {exc}"
+    if 400 <= result.status < 500 and result.status != 429:
         parser = RobotFileParser()
         parser.set_url(scheme_host + "/robots.txt")
-        parser.parse([])  # confirmed absent: permissive default, same as most crawlers
+        parser.parse([])  # unavailable policy; actual page access may still be denied
         return parser, None
     if result.status == 200:
         parser = RobotFileParser()
         parser.set_url(scheme_host + "/robots.txt")
         parser.parse((result.text or "").splitlines())
         return parser, None
-    return None, f"robots_fetch_failed: status_{result.status}"
+    return None, f"{scheme_host}/robots.txt: robots_fetch_failed: status_{result.status}"
+
+
+def _research_priority(url: str) -> tuple[int, int]:
+    path = urllib.parse.unquote(urllib.parse.urlsplit(url).path).lower()
+    if re.search(r"/(about|contact|team|company|investor|annual|financial|report|tilinpaatos|talous|yhteys|yritys|impressum|unternehmen|kontakt|ueber|über|legal|invoicing)", path):
+        return 0, path.count("/")
+    if re.search(r"blog|news|article|event|privacy|cookie|terms|tag|category", path):
+        return 2, path.count("/")
+    return 1, path.count("/")
+
+
+def _web_pdf_text(body: bytes, limit: int) -> str:
+    from pypdf import PdfReader
+    reader = PdfReader(BytesIO(body), strict=False)
+    if len(reader.pages) > 60:
+        raise ValueError("pdf_page_limit_exceeded")
+    pieces, count = [], 0
+    for number, page in enumerate(reader.pages, 1):
+        text = " ".join((page.extract_text() or "").split())
+        if not text.strip():
+            continue
+        pieces.append(f"[PDF page {number}] {text}"[:max(0, limit - count)])
+        count += len(pieces[-1])
+        if count >= limit:
+            break
+    if not pieces:
+        raise ValueError("pdf_has_no_text")
+    return "\n".join(pieces)
 
 
 def research_website(
@@ -709,6 +746,7 @@ def research_website(
     timeout: float = 10.0,
     text_excerpt_limit: int = 4000,
     before_fetch: Callable[[], None] | None = None,
+    include_documents: bool = False,
 ) -> WebsiteResearch:
     """Bounded same-site crawl starting at ``url``. Obeys robots.txt, follows
     same-host and www-alias redirects, stops at ``max_pages``
@@ -740,7 +778,7 @@ def research_website(
             fetched_at=_now(),
         )
 
-    queue: list[str] = [url]
+    queue: list[str] = [urllib.parse.urldefrag(url)[0]]
     seen: set[str] = set()
     pages: list[PageResult] = []
     contacts: list[ContactCandidate] = []
@@ -770,16 +808,15 @@ def research_website(
             continue
         seen.add(page_url)
 
-        if not robots.can_fetch(USER_AGENT, page_url):
-            robots_disallowed.append(page_url)
-            continue
-
         if before_fetch is not None:
             before_fetch()
         try:
             check_redirect(page_url)
-            result = fetch_public_url(page_url, timeout=timeout, before_redirect=check_redirect)
+            result = fetch_public_url(page_url, timeout=timeout, before_redirect=check_redirect,
+                                      allowed_content_types=DEFAULT_ALLOWED_CONTENT_TYPES | ({"application/pdf"} if include_documents else set()))
         except FetchError as exc:
+            if str(exc) == 'robots_disallowed_redirect':
+                continue
             errors.append(f"{page_url}: {exc}")
             pages.append(
                 PageResult(
@@ -794,9 +831,27 @@ def research_website(
             )
             continue
 
-        if result.final_url != page_url and not robots.can_fetch(USER_AGENT, result.final_url):
-            # ponytail: same-host redirect target checked after fetching; content is discarded, never used
-            robots_disallowed.append(result.final_url)
+        if result.final_url != page_url:
+            try:
+                check_redirect(result.final_url)
+            except FetchError:
+                continue
+        seen.add(result.final_url)
+
+        if result.status != 200:
+            error = f"page_http_{result.status}"
+            errors.append(f"{result.final_url}: {error}")
+            pages.append(PageResult(result.final_url, result.status, None, "", [], error, result.fetched_at))
+            continue
+
+        if include_documents and result.content_type == "application/pdf":
+            try:
+                text = _web_pdf_text(result.body, text_excerpt_limit)
+                pages.append(PageResult(result.final_url, 200, urllib.parse.urlsplit(result.final_url).path.rsplit('/', 1)[-1], text, [], None, result.fetched_at))
+            except Exception as exc:
+                error = str(exc) if isinstance(exc, ValueError) else 'pdf_parse_failed'
+                errors.append(f"{result.final_url}: {error[:160]}")
+                pages.append(PageResult(result.final_url, 200, None, "", [], error[:160], result.fetched_at))
             continue
 
         if result.content_type not in ("text/html", "application/xhtml+xml") or result.text is None:
@@ -833,13 +888,17 @@ def research_website(
                 contacts.append(ContactCandidate("phone", stripped, result.final_url, "text"))
 
         for link in extractor.links:
+            link = urllib.parse.urldefrag(link)[0]
             link_host = urllib.parse.urlsplit(link).hostname
             if not link_host:
                 continue
             if link_host.lower().removeprefix('www.') == root_host.removeprefix('www.'):
                 internal_links.add(link)
-                if link not in seen and len(seen) + len(queue) < max_pages * 4:
-                    queue.append(link)
+                if len(pages) + 1 < max_pages and link not in seen and link not in queue:
+                    if len(queue) < max_pages * 4 or _research_priority(link) < _research_priority(queue[-1]):
+                        queue.append(link)
+                        queue.sort(key=_research_priority)
+                        del queue[max_pages * 4:]
             else:
                 external_links.add(link)
 

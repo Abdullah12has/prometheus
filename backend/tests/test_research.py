@@ -26,7 +26,7 @@ from permetheus.research_models import (
 
 NOW = datetime.now(timezone.utc).isoformat()
 SEARX = "http://127.0.0.1:9999"
-REVENUE_QUOTE = "Acme Oy revenue in 2023 was EUR 1,200,000"
+REVENUE_QUOTE = "Acme Oy revenue was EUR 1,200,000 for the period 2023-01-01 to 2023-12-31"
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ class Net:
     """Fakes for every acquisition call the enrichment handler makes."""
 
     def __init__(self, monkeypatch, *, site_text="Acme Oy builds boats.", search_results=(), pages=None):
-        self.crawls, self.searches = [], []
+        self.crawls, self.searches, self.document_options = [], [], []
         self.pages = {"https://acme.fi": site_text, **(pages or {})}
         self.search_results = [acquisition.SearchResultItem(title=t, url=u, content=c, engine="x")
                                for t, u, c in search_results]
@@ -77,8 +77,10 @@ class Net:
         self.searches.append((query, base_url))
         return acquisition.SearchResult(query, base_url, self.search_results, False, None, NOW)
 
-    def research_website(self, url, max_pages=5, *, timeout=10.0, text_excerpt_limit=4000, before_fetch=None):
+    def research_website(self, url, max_pages=5, *, timeout=10.0, text_excerpt_limit=4000, before_fetch=None,
+                         include_documents=False):
         self.crawls.append((url, max_pages))
+        self.document_options.append(include_documents)
         if before_fetch:
             before_fetch()
         return crawl(url, [page(url, self.pages[url])])
@@ -111,6 +113,14 @@ REVENUE = {"financials": [{
 }]}
 
 
+def financial_payload(quote, *, amount, start, end, currency="EUR", period_quote=None):
+    item = {**REVENUE["financials"][0], "quote": quote, "amount": str(amount), "currency": currency,
+            "period_start": start, "period_end": end}
+    if period_quote is not None:
+        item["period_quote"] = period_quote
+    return {"financials": [item]}
+
+
 def test_known_website_still_searches_configured_searxng_and_keeps_result_sources(env, monkeypatch):
     Session, settings = env
     news = "https://news.example/acme"
@@ -122,8 +132,10 @@ def test_known_website_still_searches_configured_searxng_and_keeps_result_source
     job, fencing = claim(Session)
     enrich(Session, settings, FakeLLM(), job, fencing)
 
-    assert net.searches == [('"Acme Oy"', SEARX)]
+    assert [query for query, _ in net.searches] == [query for _, query in research._search_queries(
+        research.Target("Acme Oy", None, "acme.fi", "https://acme.fi", None))]
     assert net.crawls == [("https://acme.fi", research.WEBSITE_CRAWL_MAX_PAGES), (news, 1)]  # irrelevant result skipped
+    assert net.document_options == [True, True]
     with Session() as db:
         kept = db.scalar(select(Source).where(Source.kind == SourceKind.search_result))
         assert kept.url == news
@@ -147,6 +159,125 @@ def test_financial_quote_persisted_as_evidence_on_same_source(env, monkeypatch):
         assert fin.review_status == ReviewStatus.proposed
         assert quote.excerpt == REVENUE_QUOTE and quote.source_id == fin.source_id
         assert quote.value["amount"] == "1200000" and quote.value["period_end"] == "2023-12-31"
+
+
+def test_year_only_period_is_preserved_as_original_summary(env, monkeypatch):
+    Session, settings = env
+    quote = "Acme Oy FY2024 revenue was EUR 2,992 thousand."
+    Net(monkeypatch, site_text=quote)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    llm = FakeLLM(financial_payload(quote, amount="2992000", start="2024-01-01", end="2024-12-31"))
+    enrich(Session, settings, llm, job, fencing)
+
+    with Session() as db:
+        assert db.scalar(select(func.count(FinancialObservation.id))) == 0
+        summary = db.scalar(select(Evidence).where(Evidence.company_id == company_id,
+                                                  Evidence.field == "financial_summary_text"))
+        assert summary.value == quote and summary.excerpt == quote
+        assert summary.extraction_method == "source_quote"
+
+
+@pytest.mark.parametrize("amount", ["2992", "2992000"])
+def test_k_eur_is_preserved_as_summary_even_if_model_scales_it(amount, env, monkeypatch):
+    Session, settings = env
+    quote = "Acme Oy revenue for 01.01.2024 to 31.12.2024 was 2,992 kEUR."
+    Net(monkeypatch, site_text=quote)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    llm = FakeLLM(financial_payload(quote, amount=amount, start="2024-01-01", end="2024-12-31"))
+    enrich(Session, settings, llm, job, fencing)
+
+    with Session() as db:
+        observation = db.scalar(select(FinancialObservation).where(FinancialObservation.company_id == company_id))
+        assert observation is None
+        summary = db.scalar(select(Evidence).where(Evidence.company_id == company_id,
+                                                   Evidence.field == "financial_summary_text"))
+        assert summary.value == quote and summary.excerpt == quote
+
+
+def test_period_quote_must_be_exact_substring_of_same_source(env, monkeypatch):
+    Session, settings = env
+    quote = "Acme Oy revenue was EUR 1,200,000."
+    period_quote = "Fiscal period 01.01.2023 to 31.12.2023."
+    Net(monkeypatch, site_text=f"{quote} {period_quote}")
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    payload = financial_payload(quote, amount="1200000", start="2023-01-01", end="2023-12-31",
+                                period_quote=period_quote)
+    enrich(Session, settings, FakeLLM(payload), job, fencing)
+
+    with Session() as db:
+        observation = db.scalar(select(FinancialObservation).where(FinancialObservation.company_id == company_id))
+        assert observation is not None and observation.amount == 1_200_000
+
+
+def test_financial_amount_without_currency_unit_stays_verbatim_summary(env, monkeypatch):
+    Session, settings = env
+    quote = "Acme Oy revenue for 2024-01-01 to 2024-12-31 was 2992."
+    Net(monkeypatch, site_text=quote)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    llm = FakeLLM(financial_payload(quote, amount="2992", start="2024-01-01", end="2024-12-31"))
+    enrich(Session, settings, llm, job, fencing)
+
+    with Session() as db:
+        assert db.scalar(select(FinancialObservation).where(FinancialObservation.company_id == company_id)) is None
+        summary = db.scalar(select(Evidence).where(Evidence.company_id == company_id,
+                                                   Evidence.field == "financial_summary_text"))
+        assert summary.value == quote
+
+
+def test_negative_source_amount_cannot_support_positive_observation(env, monkeypatch):
+    Session, settings = env
+    quote = "Acme Oy revenue for 2024-01-01 to 2024-12-31 was -305 EUR."
+    Net(monkeypatch, site_text=quote)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    llm = FakeLLM(financial_payload(quote, amount="305", start="2024-01-01", end="2024-12-31"))
+    enrich(Session, settings, llm, job, fencing)
+
+    with Session() as db:
+        assert db.scalar(select(FinancialObservation).where(FinancialObservation.company_id == company_id)) is None
+        summary = db.scalar(select(Evidence).where(Evidence.company_id == company_id,
+                                                   Evidence.field == "financial_summary_text"))
+        assert summary.value == quote
+
+
+@pytest.mark.parametrize(("quote", "amount"), [
+    ("Acme Oy revenue for 2024-01-01 to 2024-12-31 was EUR 3 million.", "3"),
+    ("Acme Oy revenue for 2024-01-01 to 2024-12-31 was 2 992 EUR.", "992"),
+    ("Acme Oy revenue for 2024-01-01 to 2024-12-31 was EUR 2 992.", "2"),
+    ("Acme Oy revenue for 2024-01-01 to 2024-12-31 was −305 EUR.", "305"),
+    ("Acme Oy revenue for 2024-01-01 to 2024-12-31 was EUR 3 miljoonaa.", "3"),
+])
+def test_scaled_or_space_grouped_amounts_stay_as_summaries(env, monkeypatch, quote, amount):
+    Session, settings = env
+    Net(monkeypatch, site_text=quote)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    llm = FakeLLM(financial_payload(quote, amount=amount, start="2024-01-01", end="2024-12-31"))
+    enrich(Session, settings, llm, job, fencing)
+
+    with Session() as db:
+        assert db.scalar(select(FinancialObservation).where(FinancialObservation.company_id == company_id)) is None
+        summary = db.scalar(select(Evidence).where(Evidence.company_id == company_id,
+                                                   Evidence.field == "financial_summary_text"))
+        assert summary.value == quote
+
+
+def test_malformed_model_collections_keep_sources_and_report_the_gap(env, monkeypatch):
+    Session, settings = env
+    Net(monkeypatch)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    enrich(Session, settings, FakeLLM({"facts": {"field": "description"}, "financials": "invalid"}), job, fencing)
+    with Session() as db:
+        assert db.get(Job, job.id).state == JobState.succeeded
+        run = db.scalar(select(ResearchRun).where(ResearchRun.company_id == company_id))
+        assert len([error for error in run.errors if "must be an array" in error]) == 2
+        assert db.scalar(select(func.count(Source.id))) == 1
+        assert db.scalar(select(func.count(FinancialObservation.id))) == 0
 
 
 def test_claims_from_sources_not_naming_target_are_rejected(env, monkeypatch):
@@ -235,7 +366,8 @@ def test_job_api_exposes_live_progress_before_gather_returns(api, monkeypatch, t
     job, fencing = claim(Session)
     entered, release = Event(), Event()
 
-    def blocked_crawl(url, max_pages=5, *, timeout=10.0, text_excerpt_limit=4000, before_fetch=None):
+    def blocked_crawl(url, max_pages=5, *, timeout=10.0, text_excerpt_limit=4000, before_fetch=None,
+                      include_documents=False):
         if before_fetch:
             before_fetch()
         entered.set()
@@ -348,6 +480,85 @@ def test_non_200_html_is_not_kept_as_research_evidence(env):
     assert any("HTTP 503" in error for error in f.errors)
 
 
+def test_search_tries_later_candidates_after_blocked_results(env, monkeypatch):
+    _, settings = env
+    target = research.Target("Acme Oy", None, "acme.fi", "https://acme.fi", "FI")
+    f = research.Findings()
+    first_results = [acquisition.SearchResultItem(f"Acme result {i}", f"https://blocked.example/{i}",
+                                                  f"Acme Oy result {i}", "x") for i in range(4)]
+    fallback = acquisition.SearchResultItem("Acme annual report", "https://report.example/acme",
+                                            "Acme Oy annual report", "x")
+
+    def search(query, base_url):
+        results = first_results if "liikevaihto" not in query else [fallback]
+        return acquisition.SearchResult(query, base_url, results, False, None, NOW)
+
+    attempts = []
+    def fetch(url, **kwargs):
+        attempts.append(url)
+        if "blocked.example" in url:
+            raise ValueError("robots disallow")
+        return crawl(url, [page(url, "Acme Oy annual report revenue was EUR 100." )])
+
+    monkeypatch.setattr(acquisition, "search_web", search)
+    monkeypatch.setattr(acquisition, "research_website", fetch)
+    research._search(target, f, settings, lambda: None)
+
+    assert attempts == [f"https://blocked.example/{i}" for i in range(3)] + ["https://report.example/acme"]
+    assert any(source.url == fallback.url for source in f.fetched)
+    assert any(item.startswith("search_host_limit:blocked.example") for item in f.recommendations)
+
+
+def test_search_snippet_can_propose_employee_estimate_but_not_financials(env, monkeypatch):
+    Session, settings = env
+    snippet_url = "https://profiles.example/acme"
+    quote = "Acme Oy has approximately 25 employees."
+    Net(monkeypatch, search_results=[("Acme Oy staff", snippet_url, quote)], pages={snippet_url: ""})
+    company_id = seed(Session)
+    payload = {"facts": [
+        {"field": "employee_count_text", "value": "Approximately 25 employees; search estimate, not an official annual total.",
+         "quote": quote},
+        {"field": "financial_summary_text", "value": "Revenue EUR 8 million.", "quote": quote},
+    ], "financials": [{**REVENUE["financials"][0], "quote": quote}]}
+    job, fencing = claim(Session)
+    enrich(Session, settings, FakeLLM(payload), job, fencing)
+
+    with Session() as db:
+        employee = db.scalar(select(Evidence).where(Evidence.company_id == company_id,
+                                                     Evidence.field == "employee_count_text"))
+        assert employee.value.startswith("Approximately 25")
+        assert employee.extraction_method == "search_snippet"
+        assert employee.source.title.startswith("Search snippet (page not fetched)")
+        assert db.scalar(select(Evidence).where(Evidence.field == "financial_summary_text")) is None
+        assert db.scalar(select(func.count(FinancialObservation.id))) == 0
+        run = db.scalar(select(ResearchRun).where(ResearchRun.company_id == company_id))
+        assert any("search snippets may support employee_count_text only" in b for b in run.blocked)
+
+
+@pytest.mark.parametrize("record_website, should_bind", [("https://acme.fi", True), ("https://other.fi", False)])
+def test_link_only_registry_identity_requires_same_target_domain(env, monkeypatch, record_website, should_bind):
+    Session, settings = env
+    Net(monkeypatch, site_text="Acme Oy. Business Reg. no. 1234567-1.")
+    record = acquisition._normalize_company(
+        {"businessId": {"value": "1234567-1"}, "names": [{"name": "Acme Oy"}],
+         "website": {"url": record_website}}, source_url="https://prh.example/c", fetched_at=NOW)
+    lookups = []
+    def prh(**kwargs):
+        lookups.append(kwargs)
+        return acquisition.PRHSearchResult([record], 1, 1, None, "https://prh.example/c", NOW)
+    monkeypatch.setattr(acquisition, "prh_search", prh)
+    company_id = seed(Session)
+    job, fencing = claim(Session)
+    enrich(Session, settings, FakeLLM(), job, fencing)
+
+    with Session() as db:
+        ids = list(db.scalars(select(CompanyIdentifier).where(CompanyIdentifier.company_id == company_id)))
+        run = db.scalar(select(ResearchRun).where(ResearchRun.company_id == company_id))
+        assert lookups == [{"business_id": "1234567-1"}]
+        assert bool(ids) is should_bind
+        assert any("PRH website does not match" in item for item in run.blocked) is (not should_bind)
+
+
 def test_results_commit_with_job_success_and_reruns_do_not_duplicate_or_touch_reviewed(env, monkeypatch):
     Session, settings = env
     Net(monkeypatch, site_text=REVENUE_QUOTE)
@@ -377,9 +588,10 @@ def test_results_commit_with_job_success_and_reruns_do_not_duplicate_or_touch_re
 
 def test_registry_id_owned_by_other_company_is_not_merged(env, monkeypatch):
     Session, settings = env
-    Net(monkeypatch)
+    Net(monkeypatch, site_text="Acme Oy. Y-tunnus 1234567-1.")
     record = acquisition._normalize_company(
-        {"businessId": {"value": "1234567-1"}, "names": [{"name": "Acme Oy"}]}, source_url="https://prh.example/c",
+        {"businessId": {"value": "1234567-1"}, "names": [{"name": "Acme Oy"}],
+         "website": {"url": "https://acme.fi"}}, source_url="https://prh.example/c",
         fetched_at=NOW)
     monkeypatch.setattr(acquisition, "prh_search",
                         lambda **kw: acquisition.PRHSearchResult([record], 1, 1, None, "https://prh.example/c", NOW))

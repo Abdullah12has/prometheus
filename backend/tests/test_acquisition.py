@@ -2,6 +2,7 @@ import itertools
 import gzip
 import json
 import sys
+import ssl
 import threading
 import unittest
 import urllib.error
@@ -165,6 +166,14 @@ class FetchPublicUrlSSRFTests(unittest.TestCase):
 
 
 class FetchPublicUrlBoundsTests(unittest.TestCase):
+    def test_invalid_certificate_stays_rejected_with_specific_reason(self):
+        connection = _FakeConnection(None)
+        connection.request = mock.Mock(side_effect=ssl.SSLCertVerificationError('certificate rejected'))
+        with mock.patch.object(acquisition, '_resolve_host', return_value=[PUBLIC_IP]), mock.patch.object(acquisition, '_open_connection', return_value=connection):
+            with self.assertRaisesRegex(acquisition.FetchError, 'tls_certificate_invalid'):
+                acquisition.fetch_public_url('https://example.com/')
+        self.assertTrue(connection.closed)
+
     def _patched(self, responses):
         factory = _FakeConnectionFactory(responses)
         return (
@@ -515,6 +524,55 @@ class PageExtractorTests(unittest.TestCase):
 
 
 class ResearchWebsiteTests(unittest.TestCase):
+
+    def test_robots_403_allows_public_page_but_page_403_is_not_evidence(self):
+        requested = []
+        def fetch(url, **kwargs):
+            requested.append(url)
+            status = 403
+            html = '<a href="/fake">Contact fake@example.com</a>'
+            return acquisition.FetchResult(url, url, status, 'text/html', {}, html.encode(), html, [], False, acquisition._now())
+        with mock.patch.object(acquisition, 'fetch_public_url', side_effect=fetch):
+            result = acquisition.research_website('https://example.com/', max_pages=3)
+        self.assertEqual(requested, ['https://example.com/robots.txt', 'https://example.com/'])
+        self.assertEqual(result.contacts, [])
+        self.assertEqual(result.pages[0].text_excerpt, '')
+        self.assertIn('https://example.com/', result.errors[0])
+        self.assertIn('403', result.errors[0])
+
+    def test_failed_robots_error_identifies_origin(self):
+        with mock.patch.object(acquisition, 'fetch_public_url', side_effect=acquisition.FetchError('tls_certificate_invalid')):
+            result = acquisition.research_website('https://example.com/about')
+        self.assertIn('https://example.com/robots.txt', result.errors[0])
+        self.assertIn('tls_certificate_invalid', result.errors[0])
+
+    def test_research_prioritizes_about_and_reports_over_product_navigation(self):
+        requested = []
+        def fetch(url, **kwargs):
+            requested.append(url)
+            body = '' if url.endswith('/robots.txt') else ('<a href="/products/a">A</a><a href="/products/b">B</a>'
+                '<a href="/resources/why-the-team-enjoys-work">Story</a><a href="/about#team">About</a>'
+                '<a href="/about#values">Values</a><a href="/investors/annual-report">Report</a>'
+                '<a href="/legal/invoicing">Business identity</a>') if url.endswith('/') else 'Company details'
+            return acquisition.FetchResult(url, url, 200, 'text/plain' if url.endswith('/robots.txt') else 'text/html', {}, body.encode(), body, [], False, acquisition._now())
+        with mock.patch.object(acquisition, 'fetch_public_url', side_effect=fetch):
+            result = acquisition.research_website('https://example.com/', max_pages=4)
+        self.assertEqual({p.url for p in result.pages}, {'https://example.com/', 'https://example.com/about', 'https://example.com/investors/annual-report', 'https://example.com/legal/invoicing'})
+
+    def test_web_pdf_is_read_only_when_opted_in_and_empty_scan_is_explicit(self):
+        from io import BytesIO
+        from pypdf import PdfWriter
+        output = BytesIO(); writer = PdfWriter(); writer.add_blank_page(100, 100); writer.write(output)
+        def fetch(url, **kwargs):
+            if url.endswith('/robots.txt'):
+                return acquisition.FetchResult(url, url, 200, 'text/plain', {}, b'', '', [], False, acquisition._now())
+            self.assertIn('application/pdf', kwargs['allowed_content_types'])
+            return acquisition.FetchResult(url, url, 200, 'application/pdf', {}, output.getvalue(), None, [], False, acquisition._now())
+        with mock.patch.object(acquisition, 'fetch_public_url', side_effect=fetch):
+            result = acquisition.research_website('https://example.com/annual.pdf', max_pages=1, include_documents=True)
+        self.assertEqual(result.pages[0].error, 'pdf_has_no_text')
+        self.assertEqual(result.contacts, [])
+
     def _fake_fetch_factory(self):
         robots_txt = "User-agent: *\nDisallow: /private\n"
 
