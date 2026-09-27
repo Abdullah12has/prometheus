@@ -19,11 +19,11 @@ See [local setup and recovery](LOCAL_SETUP.md) for the pinned speech model, back
 
 ## Main workflows
 
-- **Companies:** paste a name or website, or discover records from the Finnish register. Inspect research coverage, sources, contacts and financials. Scraped facts are proposals; review them before relying on them for matching. Upload text PDF/iXBRL statements under Financials. Scanned PDFs need manual review.
+- **Companies:** paste a name or website, or import Finnish and Swiss registry data and Germany's public LEI subset. Filter by country, search identifiers, and pause/resume population or background research. See [source coverage](DATA_SOURCES.md). Inspect research coverage, sources, contacts and financials. Scraped facts are proposals; review them before relying on them for matching. Upload text PDF/iXBRL statements under Financials. Scanned PDFs need manual review.
 - **Futures:** record owner conditions, confirm an exact version, and compare hypothetical scenarios without changing the confirmed conditions.
 - **Matches:** record sourced buyer mandates, run comparisons, inspect reasons and missing evidence, record outcomes, and replay historical snapshots. An authorized brief can become an unapproved email draft.
 - **Outreach:** connect Gmail, review drafts and recipients, approve exact content, then send. Manage follow-up sequences, opt-outs and the global stop control here. No email is sent simply by researching or matching a company.
-- **Voice & notes:** create an agent, upload or record an authorized voice sample, preview it, and run a browser conversation. The Notes tab records locally, resumes pending uploads, transcribes and proposes a summary. Failed transcriptions can be retried without losing corrections. Audio and transcripts stay in local storage; text sent to the configured model leaves the machine.
+- **Voice & notes:** name an agent, record or upload a 3–30 second voice sample in the same form, then save to clone and preview it. Failed clones retain the sample for retry; a bundled voice is also available. Run browser conversations with optional saved transcripts. The Notes tab records locally, resumes pending uploads, transcribes and proposes a summary. Failed transcriptions can be retried without losing corrections. Audio and transcripts stay in local storage; text sent to the configured model leaves the machine.
 - **Assistant:** describe actions in plain English. It uses the same application APIs to research, prepare drafts and run comparisons; confirmations and sending remain explicit UI actions.
 
 ## Connections
@@ -40,12 +40,14 @@ Paid telephone calling is deferred. Leave `TWILIO_FROM_NUMBER` and `PUBLIC_BASE_
 make check
 cd web
 npx playwright test tests/company.spec.ts tests/workspace.spec.ts tests/matches.spec.ts
-RUN_VOICE_E2E=1 RUN_NOTES_E2E=1 npx playwright test tests/voice.spec.ts tests/notes-recording.spec.ts
+RUN_VOICE_E2E=1 RUN_NOTES_E2E=1 npx playwright test tests/voice.spec.ts tests/voice-clone.spec.ts tests/notes-recording.spec.ts
 # Optional live registry check; requires the imported Reformo Networks Oy demo record:
 RUN_RESEARCH_E2E=1 npx playwright test tests/research.spec.ts
+# Optional populated-country UI check; requires at least 100 imported Swiss companies:
+RUN_REGISTRY_E2E=1 npx playwright test tests/discovery-ui.spec.ts
 ```
 
-Browser tests require the running application and its local `.env`. Voice tests additionally need the local speech fixture `data/asr-smoke.wav`, speech models, and a working model gateway. They use a recorded source at the microphone boundary; the application audio processing, ASR, model, synthesis, uploads and database paths are real. Physical microphone permission/capture needs a manual check on the demonstration browser.
+Browser tests require the running application and its local `.env`. Voice tests additionally need the local speech fixtures `data/asr-smoke.wav` and `data/voice-smoke.wav`, speech models, and a working model gateway. They use a recorded source at the microphone boundary; the application audio processing, ASR, model, synthesis, uploads and database paths are real. Physical microphone permission/capture needs a manual check on the demonstration browser.
 
 Research is bounded and reports inaccessible sources and missing information. Public strategy is not a verified buyer mandate; historical announcements are not proof of present buying interest. Matching scores are explainable constraint rankings, not probabilities or valuations. Live Gmail delivery requires Google authorization and has not been tested against a real mailbox.
 

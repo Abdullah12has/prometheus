@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { RouterProvider, useSegments } from './lib/router'
 import { ToastProvider } from './lib/toast'
@@ -41,6 +42,7 @@ function RouteOutlet() {
 
 function Shell() {
   const { status } = useAuth()
+  const [assistantOpen, setAssistantOpen] = useState(false)
 
   if (status === 'checking') {
     return (
@@ -56,11 +58,11 @@ function Shell() {
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar assistantOpen={assistantOpen} onToggleAssistant={() => setAssistantOpen((open) => !open)} />
       <main className="app-shell__content" id="main-content">
         <RouteOutlet />
       </main>
-      <AssistantPanel />
+      <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
     </div>
   )
 }

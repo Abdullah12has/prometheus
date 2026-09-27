@@ -8,7 +8,7 @@ from datetime import timedelta
 from sqlalchemy import select, update
 from starlette.requests import Request
 
-from . import deals, documents, mail, notes, research, worker
+from . import deals, documents, mail, notes, registry, research, worker
 from .models import Job, JobState, utcnow
 
 log = logging.getLogger('permetheus.background')
@@ -86,8 +86,29 @@ async def research_loop(app):
         await asyncio.sleep(2)
 
 
+async def registry_loop(app):
+    # Own loop: an hours-long bulk import must not starve enrichment or media jobs.
+    while True:
+        try:
+            if await asyncio.to_thread(registry.process_one, app.state.sessionmaker, app.state.settings):
+                continue
+        except Exception:
+            log.exception('Registry import queue unavailable')
+        await asyncio.sleep(5)
+
+
+async def enrichment_feeder_loop(app):
+    while True:
+        try:
+            await asyncio.to_thread(registry.feed_enrichment, app.state.sessionmaker)
+        except Exception:
+            log.exception('Enrichment feeder failed')
+        await asyncio.sleep(15)
+
+
 def scheduled_cycle(app):
-    deals.refresh_matches(app.state.sessionmaker)
+    _, app.state.match_cursor = deals.refresh_match_batch(
+        app.state.sessionmaker, getattr(app.state, 'match_cursor', None))
     with app.state.sessionmaker() as db:
         research.maybe_enqueue_scheduled_discovery(db)
     with app.state.sessionmaker() as db:
@@ -114,10 +135,17 @@ async def scheduled_loop(app):
 
 
 def start(app):
-    return [asyncio.create_task(loop(app)) for loop in (research_loop, media_loop, scheduled_loop)]
+    registry.STOP.clear()
+    # Two researchers share the local search/model budget; one import lane per country.
+    loops = (research_loop, research_loop, media_loop, scheduled_loop,
+             registry_loop, registry_loop, registry_loop, enrichment_feeder_loop)
+    return [asyncio.create_task(loop(app)) for loop in loops]
 
 
 async def stop(tasks):
+    if tasks:
+        registry.STOP.set()
+        registry.requeue_owned_jobs()  # fenced even when a cancelled to_thread call is still in I/O
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)

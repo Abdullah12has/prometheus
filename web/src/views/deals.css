@@ -11,12 +11,9 @@
   max-width: 420px;
 }
 
-.company-picker select {
-  border: 1px solid var(--color-navy-border);
-  border-radius: var(--radius-sm);
-  padding: 9px 12px;
-  background: var(--color-surface);
-  color: var(--color-navy);
+.company-picker label {
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .identity-verify {
@@ -70,36 +67,6 @@
   .proposal-review__facts { grid-template-columns: 1fr; }
 }
 
-/* ---------- Tabs ---------- */
-
-.deals-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--color-navy-border);
-  overflow-x: auto;
-}
-
-.deals-tabs__btn {
-  border: none;
-  background: none;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-navy-muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-}
-
-.deals-tabs__btn:hover {
-  color: var(--color-navy);
-}
-
-.deals-tabs__btn--active {
-  color: var(--color-cobalt-strong);
-  border-bottom-color: var(--color-cobalt);
-}
-
 /* ---------- Badges ---------- */
 
 .badge {
@@ -117,8 +84,8 @@
 .badge--fail { background: var(--color-red-faint); color: var(--color-red); }
 .badge--unknown { background: var(--color-amber-faint); color: var(--color-amber); }
 .badge--neutral { background: var(--color-navy-faint); color: var(--color-navy-muted); }
-.badge--hard { background: var(--color-navy-faint); color: var(--color-navy); }
-.badge--soft { background: var(--color-cobalt-faint); color: var(--color-cobalt-strong); }
+.badge--hard { background: var(--bg-inverted); color: var(--text-on-inverted); }
+.badge--soft { background: var(--bg-canvas); color: var(--text-strong); box-shadow: inset 0 0 0 1px var(--border-strong); }
 
 .status-pill {
   display: inline-flex;
@@ -183,9 +150,9 @@
   cursor: pointer;
 }
 
-.strength-btn--active-hard { background: var(--color-navy); color: #fff; border-color: var(--color-navy); }
-.strength-btn--active-soft { background: var(--color-cobalt); color: #fff; border-color: var(--color-cobalt); }
-.strength-btn--active-unknown { background: var(--color-amber); color: #fff; border-color: var(--color-amber); }
+.strength-btn--active-hard { background: var(--bg-inverted); color: var(--text-on-inverted); border-color: var(--bg-inverted); }
+.strength-btn--active-soft { background: var(--bg-active); color: var(--text-strong); border-color: var(--border-strong); }
+.strength-btn--active-unknown { background: var(--status-warning-tint); color: var(--status-warning); border-color: var(--status-warning); }
 
 .condition-row__fields {
   display: grid;
@@ -203,11 +170,7 @@
 
 .condition-row__fields input,
 .condition-row__fields select {
-  border: 1px solid var(--color-navy-border);
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  background: var(--color-surface);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 .multi-check {
@@ -242,8 +205,8 @@
 }
 
 .profile-card--effective {
-  border-color: var(--color-cobalt);
-  background: var(--color-cobalt-faint);
+  border-color: var(--border-focus);
+  background: var(--bg-subtle);
 }
 
 .profile-card__head {

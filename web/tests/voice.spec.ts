@@ -36,12 +36,17 @@ test('browser audio processing, local ASR, model response and audio playback', a
     await page.getByRole('button', { name: 'Create agent', exact: true }).click()
     await page.getByLabel('Name', { exact: true }).fill('Temporary browser voice verification')
     await page.getByLabel('Introduction', { exact: false }).fill('Hello. I am an AI assistant. What would make a deal work for you?')
+    await page.getByText('Advanced settings (optional)', { exact: true }).click()
     await page.getByLabel('Additional instructions').fill('Reply in one short sentence.')
+    // This test only verifies the live call path, not cloning, so skip the sample and use the
+    // bundled voice.
+    await page.getByLabel('Use the bundled voice', { exact: true }).check()
     const created = page.waitForResponse(response => response.url().endsWith('/api/voice/agents') && response.request().method() === 'POST')
     await page.getByRole('button', { name: 'Save agent', exact: true }).click()
     agentId = (await (await created).json()).id
     agentId = await page.getByLabel('Conversation agent', { exact: true }).inputValue()
-    await page.getByLabel('The participant has agreed to this browser conversation and transcript recording.').check()
+    // Off by default: turning this on is what makes this personal test's transcript get saved.
+    await page.getByLabel("Save transcript", { exact: true }).check()
     await page.getByRole('button', { name: 'Start browser conversation', exact: true }).click()
     const captions = page.getByLabel('Conversation captions')
     await expect(captions.locator('.is-user').filter({ hasText: /deal work for you/i }).first()).toBeVisible({ timeout: 120_000 })

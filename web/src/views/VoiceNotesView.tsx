@@ -16,8 +16,8 @@ export function VoiceNotesView() {
   }
 
   return <div className="page">
-    <header className="page__header"><h1>Voice & notes</h1><p className="page__lede">Run a browser conversation or capture a meeting for review.</p></header>
-    <div className="voice-tabs" role="tablist" aria-label="Voice workspace">
+    <header className="page__header"><h1>Voice & notes</h1><p className="page__lede">Run a browser conversation with a voice agent, or capture a meeting for review.</p></header>
+    <div className="view-tabs" role="tablist" aria-label="Voice workspace">
       <button type="button" role="tab" aria-selected={tab === 'agents'} aria-controls="voice-tab-agents" className={tab === 'agents' ? 'is-active' : ''} onClick={() => chooseTab('agents')}>Voice agents</button>
       <button type="button" role="tab" aria-selected={tab === 'notes'} aria-controls="voice-tab-notes" className={tab === 'notes' ? 'is-active' : ''} onClick={() => chooseTab('notes')}>Notes</button>
     </div>

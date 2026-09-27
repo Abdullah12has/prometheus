@@ -21,7 +21,8 @@ import {
   GitCompareArrows, Plus, Play, Pause, Upload, RefreshCw, ChevronDown, ChevronRight, ShieldCheck,
 } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
-import type { Company, CompanyDetail, CompanyListResponse, Contact } from '../lib/types'
+import type { CompanyDetail, Contact } from '../lib/types'
+import { CompanyPicker } from '../components/CompanyPicker'
 import { LoadingBlock, ErrorBlock, EmptyState } from '../components/StateViews'
 import { useToast } from '../lib/toast'
 import { Link } from '../lib/router'
@@ -109,23 +110,9 @@ function SourcePicker({
 
 export function MatchesView() {
   const [tab, setTab] = useState<TabId>('mandates')
-  const [companies, setCompanies] = useState<Company[] | null>(null)
-  const [companiesStatus, setCompaniesStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-
-  function loadCompanies() {
-    setCompaniesStatus('loading')
-    api
-      .get<CompanyListResponse | Company[]>('/api/companies')
-      .then((r) => {
-        setCompanies(Array.isArray(r) ? r : r.items)
-        setCompaniesStatus('ready')
-      })
-      .catch(() => setCompaniesStatus('error'))
-  }
-  useEffect(loadCompanies, [])
 
   return (
-    <div className="page" style={{ maxWidth: 1080 }}>
+    <div className="page">
       <header className="page__header">
         <h1>Matches</h1>
         <p className="page__lede">
@@ -135,12 +122,13 @@ export function MatchesView() {
         </p>
       </header>
 
-      <nav className="deals-tabs" aria-label="Matches sections">
+      <nav className="view-tabs" aria-label="Matches sections">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
-            className={`deals-tabs__btn ${tab === t.id ? 'deals-tabs__btn--active' : ''}`}
+            className={tab === t.id ? 'is-active' : undefined}
+            aria-current={tab === t.id ? 'page' : undefined}
             onClick={() => setTab(t.id)}
           >
             {t.label}
@@ -148,19 +136,13 @@ export function MatchesView() {
         ))}
       </nav>
 
-      {tab === 'mandates' && <MandatesTab companies={companies} companiesStatus={companiesStatus} />}
-      {tab === 'matches' && (
-        <MatchesTab companies={companies} companiesStatus={companiesStatus} onRetryCompanies={loadCompanies} />
-      )}
-      {tab === 'opportunities' && (
-        <OpportunitiesTab companies={companies} companiesStatus={companiesStatus} />
-      )}
-      {tab === 'graph' && (
-        <GraphTab companies={companies} companiesStatus={companiesStatus} />
-      )}
+      {tab === 'mandates' && <MandatesTab />}
+      {tab === 'matches' && <MatchesTab />}
+      {tab === 'opportunities' && <OpportunitiesTab />}
+      {tab === 'graph' && <GraphTab />}
       {tab === 'history' && <HistoryTab />}
       {tab === 'analytics' && <AnalyticsTab />}
-      {tab === 'replay' && <ReplayTab companies={companies} companiesStatus={companiesStatus} />}
+      {tab === 'replay' && <ReplayTab />}
     </div>
   )
 }
@@ -171,7 +153,7 @@ function emptyCriteria(): MandateCriteria {
   return {}
 }
 
-function MandateForm({ onSaved, companies, companiesStatus }: { onSaved: () => void; companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error' }) {
+function MandateForm({ onSaved }: { onSaved: () => void }) {
   const { push } = useToast()
   const [buyerName, setBuyerName] = useState('')
   const [buyerCompanyId, setBuyerCompanyId] = useState('')
@@ -323,12 +305,7 @@ function MandateForm({ onSaved, companies, companiesStatus }: { onSaved: () => v
         )}
         <div className="condition-row__fields">
           <label htmlFor="mandate-buyer-company">Existing buyer company (for verified buyer contacts)</label>
-          {companiesStatus === 'loading' ? <span className="muted small">Loading companies…</span> : companiesStatus === 'error' ? <span className="field-error">Could not load companies. Reload the page to choose a buyer company.</span> : (
-            <select id="mandate-buyer-company" value={buyerCompanyId} onChange={(e) => setBuyerCompanyId(e.target.value)}>
-              <option value="">No linked company</option>
-              {(companies ?? []).map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-            </select>
-          )}
+          <CompanyPicker id="mandate-buyer-company" value={buyerCompanyId} onChange={(value) => setBuyerCompanyId(String(value))} emptyLabel="No linked company" />
         </div>
         <label className="checkbox-label identity-verify">
           <input type="checkbox" checked={identityVerified} onChange={(e) => { setIdentityVerified(e.target.checked); if (e.target.checked) setWantMandateSource(true) }} />
@@ -463,7 +440,7 @@ function MandateForm({ onSaved, companies, companiesStatus }: { onSaved: () => v
   )
 }
 
-function MandatesTab({ companies, companiesStatus }: { companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error' }) {
+function MandatesTab() {
   const [mandates, setMandates] = useState<MandateOut[] | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -502,7 +479,7 @@ function MandatesTab({ companies, companiesStatus }: { companies: Company[] | nu
 
       {showForm && (
         <div className="panel">
-          <MandateForm companies={companies} companiesStatus={companiesStatus} onSaved={() => { setShowForm(false); load() }} />
+          <MandateForm onSaved={() => { setShowForm(false); load() }} />
         </div>
       )}
 
@@ -613,9 +590,7 @@ function MatchResultCard({ r }: { r: MatchResultOut }) {
   )
 }
 
-function MatchesTab({
-  companies, companiesStatus, onRetryCompanies,
-}: { companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error'; onRetryCompanies: () => void }) {
+function MatchesTab() {
   const { push } = useToast()
   const [companyId, setCompanyId] = useState('')
   const [running, setRunning] = useState(false)
@@ -662,13 +637,7 @@ function MatchesTab({
     <section className="deals-section">
       <div className="company-picker">
         <label htmlFor="matches-company">Company</label>
-        {companiesStatus === 'error' && <ErrorBlock message="Could not load companies." onRetry={onRetryCompanies} />}
-        {companiesStatus !== 'error' && (
-          <select id="matches-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">Select a company…</option>
-            {(companies ?? []).map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-          </select>
-        )}
+        <CompanyPicker id="matches-company" value={companyId} onChange={(value) => setCompanyId(String(value))} />
       </div>
 
       {companyId && (
@@ -1024,7 +993,7 @@ function EmailDraftForm({ opportunityId, proposal, mandateId }: { opportunityId:
   )
 }
 
-function OpportunitiesTab({ companies, companiesStatus }: { companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error' }) {
+function OpportunitiesTab() {
   const [companyId, setCompanyId] = useState('')
   const [opportunities, setOpportunities] = useState<OpportunityOut[] | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -1055,12 +1024,7 @@ function OpportunitiesTab({ companies, companiesStatus }: { companies: Company[]
     <section className="deals-section">
       <div className="company-picker">
         <label htmlFor="opp-company">Company (optional filter)</label>
-        {companiesStatus !== 'error' && (
-          <select id="opp-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">All companies</option>
-            {(companies ?? []).map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-          </select>
-        )}
+        <CompanyPicker id="opp-company" value={companyId} onChange={(value) => setCompanyId(String(value))} emptyLabel="All companies" />
       </div>
 
       {status === 'loading' && <LoadingBlock label="Loading opportunities…" />}
@@ -1145,8 +1109,9 @@ function hashAngle(id: string, count: number, index: number): number {
   return (360 / Math.max(count, 1)) * index + jitter
 }
 
-function GraphTab({ companies, companiesStatus }: { companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error' }) {
+function GraphTab() {
   const [companyId, setCompanyId] = useState('')
+  const [companyName, setCompanyName] = useState('Company')
   const [detail, setDetail] = useState<MatchRunDetail | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null)
@@ -1180,7 +1145,6 @@ function GraphTab({ companies, companiesStatus }: { companies: Company[] | null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, reducedMotion, detail])
 
-  const companyName = companies?.find((c) => c.id === companyId)?.name ?? 'Company'
   const colorFor = { compatible: 'var(--color-teal)', research_needed: 'var(--color-amber)', excluded: 'var(--color-red)' } as const
 
   const buyerNames = useMemo(() => {
@@ -1200,12 +1164,8 @@ function GraphTab({ companies, companiesStatus }: { companies: Company[] | null;
     <section className="deals-section">
       <div className="company-picker">
         <label htmlFor="graph-company">Company</label>
-        {companiesStatus !== 'error' && (
-          <select id="graph-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">Select a company…</option>
-            {(companies ?? []).map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-          </select>
-        )}
+        <CompanyPicker id="graph-company" value={companyId} onChange={(value) => setCompanyId(String(value))}
+          onResolved={(items) => setCompanyName(items[0]?.name ?? 'Company')} />
       </div>
 
       {status === 'loading' && <LoadingBlock label="Loading latest match run…" />}
@@ -1591,7 +1551,7 @@ function AnalyticsTab() {
 
 // ================================================================== Replay
 
-function ReplayTab({ companies, companiesStatus }: { companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error' }) {
+function ReplayTab() {
   const [asOf, setAsOf] = useState('')
   const [companyId, setCompanyId] = useState('')
   const [result, setResult] = useState<ReplayResponse | null>(null)
@@ -1629,12 +1589,7 @@ function ReplayTab({ companies, companiesStatus }: { companies: Company[] | null
         </div>
         <div className="field-col">
           <label htmlFor="replay-company">Company (optional)</label>
-          {companiesStatus !== 'error' && (
-            <select id="replay-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-              <option value="">All companies</option>
-              {(companies ?? []).map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-            </select>
-          )}
+          <CompanyPicker id="replay-company" value={companyId} onChange={(value) => setCompanyId(String(value))} emptyLabel="All companies" />
         </div>
         <div className="field-col" style={{ alignSelf: 'flex-end' }}>
           <button type="submit" className="btn btn--primary" disabled={busy}>

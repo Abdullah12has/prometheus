@@ -99,6 +99,9 @@ def claim_job(db: Session, *, kinds: tuple[str, ...] = HANDLED_KINDS, now=None) 
         db.commit()
         if job.kind == JOB_KIND_DISCOVERY:
             research.mark_discovery_run_abandoned(db, job)
+        elif job.kind == "registry.import":
+            from . import registry  # registry imports worker; resolve lazily
+            registry.mark_abandoned(db, job)
         return None
 
     new_attempts = prior_attempts + 1

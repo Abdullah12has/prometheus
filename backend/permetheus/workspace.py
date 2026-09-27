@@ -68,7 +68,9 @@ def health(db: Session = Depends(get_db)):
 
 # (id, label, env fields, note). Implemented flags flip as each connector ships.
 CONNECTORS = [
-    ("registry_fi", "Finnish trade register", [], "Public open-data API; bounded discovery with source records."),
+    ("registry_fi", "Finnish trade register", [], "PRH daily bulk import and targeted searches. Manage country imports in Companies."),
+    ("registry_ch", "Swiss commercial register", [], "Zefix public linked data via LINDAS. Resumable country import in Companies."),
+    ("registry_de", "German LEI records", [], "GLEIF public records for German-address entities with an LEI; a subset of German companies."),
     ("gmail", "Gmail", ["google_client_id", "google_client_secret"],
      "Configure Google OAuth credentials, then connect your mailbox in Outreach."),
     ("llm", "Language model", ["litellm_base_url", "litellm_api_key", "litellm_model"],

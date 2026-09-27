@@ -92,7 +92,7 @@ export function CompanyDetailView({ id }: { id: string }) {
       </div></div><button type="button" className="btn btn--secondary" onClick={startEditing}><Pencil size={14} aria-hidden="true" /> Edit</button></header>
       {!editing ? <>
         <div className="company-summary"><span className="company-summary__status">{company.status === 'confirmed' ? 'Identity confirmed' : 'Identity provisional'}</span><SellerIntentBadge intent={company.seller_intent ?? 'unknown'} /><Link to={`/futures?company=${id}`} className="btn btn--secondary">Research &amp; explore futures</Link></div>
-        <nav className="company-tabs" aria-label="Company sections">{tabs.map((item) => <button type="button" key={item} className={tab === item ? 'is-active' : ''} aria-current={tab === item ? 'page' : undefined} onClick={() => setTab(item)}>{item}</button>)}</nav>
+        <nav className="view-tabs company-tabs" aria-label="Company sections">{tabs.map((item) => <button type="button" key={item} className={tab === item ? 'is-active' : ''} aria-current={tab === item ? 'page' : undefined} onClick={() => setTab(item)}>{item}</button>)}</nav>
         {formError && <p className="field-error" role="alert">{formError}</p>}
         {tab === 'Overview' && <div className="company-panels">
           <section className="panel"><h2>Company overview</h2>{company.description ? <p className="detail-description">{company.description}</p> : <p className="muted">No description recorded.</p>}<dl className="detail-grid"><div><dt>Business IDs</dt><dd>{company.identifiers.length ? company.identifiers.map((item) => `${item.jurisdiction} ${item.value}`).join(', ') : 'Not recorded'}</dd></div><div><dt>Registry status</dt><dd>{company.registry_status ?? 'Not recorded'}</dd></div></dl>

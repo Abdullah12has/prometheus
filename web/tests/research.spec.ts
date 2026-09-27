@@ -37,14 +37,15 @@ test('bounded registry discovery reuses an existing company and coverage shows m
   const existingName = existing[0].name
 
   await page.getByRole('link', { name: 'Companies', exact: true }).click()
-  await page.getByText('Discover companies from the Finnish register', { exact: true }).click()
+  await page.getByText('Discover and research companies', { exact: true }).click()
+  await page.getByText('Advanced targeted search', { exact: true }).click()
   await page.getByLabel('Company name', { exact: true }).fill(targetName)
   await page.locator('.discovery-form__limits select').selectOption('1')
   await page.locator('.discovery-form__limits input[type="number"]').fill('1')
   const startedResponsePromise = page.waitForResponse(response =>
     response.url().endsWith('/api/discovery/runs') && response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Start discovery', exact: true }).click()
+  await page.getByRole('button', { name: 'Start targeted search', exact: true }).click()
   const startedResponse = await startedResponsePromise
   expect(startedResponse.status()).toBe(202)
   const started = await startedResponse.json() as DiscoveryRun

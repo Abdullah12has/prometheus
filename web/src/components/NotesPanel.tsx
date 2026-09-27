@@ -39,7 +39,7 @@ import {
   X,
 } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Company } from '../lib/types'
+import { CompanyPicker } from './CompanyPicker'
 import { useToast } from '../lib/toast'
 import {
   createNote,
@@ -124,7 +124,6 @@ type ComposerMode = 'idle' | 'recording' | 'uploading-file'
 function NotesPanelInner() {
   const { push } = useToast()
 
-  const [companies, setCompanies] = useState<Company[]>([])
   const [notes, setNotes] = useState<Note[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
   const [listStatus, setListStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -166,10 +165,6 @@ function NotesPanelInner() {
   useEffect(() => {
     loadNotes()
     loadSessions()
-    api
-      .get<Company[] | { items: Company[] }>('/api/companies')
-      .then((response) => setCompanies(Array.isArray(response) ? response : response.items))
-      .catch(() => setCompanies([]))
   }, [loadNotes, loadSessions])
 
   // Poll the list while any note is actively processing on the server.
@@ -449,19 +444,8 @@ function NotesPanelInner() {
             <label htmlFor="note-company">
               <Building2 size={13} aria-hidden="true" /> Company (optional)
             </label>
-            <select
-              id="note-company"
-              value={companyId}
-              onChange={(event) => setCompanyId(event.target.value)}
-              disabled={isBusy}
-            >
-              <option value="">No company</option>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name || 'Unnamed company'}
-                </option>
-              ))}
-            </select>
+            <CompanyPicker id="note-company" value={companyId} onChange={(value) => setCompanyId(String(value))}
+              emptyLabel="No company" disabled={isBusy} />
           </div>
         </div>
 

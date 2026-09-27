@@ -32,9 +32,11 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import math
 import re
 import socket
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -836,6 +838,16 @@ def research_website(
 # ---------------------------------------------------------------------------
 
 DEFAULT_SEARXNG_BASE_URL = "http://127.0.0.1:8888"
+_SEARCH_LOCK = threading.Lock()
+_SEARCH_MIN_INTERVAL = 5.0
+_SEARCH_FAILURE_COOLDOWN = 120.0
+_SEARCH_LAST_REQUEST_AT: float | None = None
+_SEARCH_COOLDOWN_UNTIL = 0.0
+
+
+def _search_quota_failure(error: str | None) -> bool:
+    lowered = (error or "").lower()
+    return any(marker in lowered for marker in ("too many requests", "captcha", "429", "rate limit", "ratelimit"))
 
 
 @dataclass
@@ -874,34 +886,60 @@ def search_web(
 
     url = base_url.rstrip("/") + "/search?" + urllib.parse.urlencode({"q": query, "format": "json"})
     request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = response.read(max_bytes + 1)
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        return SearchResult(query, base_url, [], True, f"searxng_unreachable: {exc}", fetched_at)
-
-    if len(body) > max_bytes:
-        return SearchResult(query, base_url, [], True, "response_too_large", fetched_at)
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        return SearchResult(query, base_url, [], True, "invalid_json_response", fetched_at)
-    if not isinstance(payload, dict):
-        return SearchResult(query, base_url, [], True, "invalid_json_response", fetched_at)
-
-    items = []
-    for entry in payload.get("results", []) or []:
-        if not isinstance(entry, dict) or not entry.get("url"):
-            continue
-        items.append(
-            SearchResultItem(
-                title=entry.get("title") or entry["url"],
-                url=entry["url"],
-                content=entry.get("content"),
-                engine=entry.get("engine"),
+    global _SEARCH_LAST_REQUEST_AT, _SEARCH_COOLDOWN_UNTIL
+    # ponytail: one process-wide lock serializes SearXNG requests; use per-engine pacing if concurrency warrants it.
+    with _SEARCH_LOCK:
+        now = time.monotonic()
+        if _SEARCH_COOLDOWN_UNTIL > now:
+            remaining = math.ceil(_SEARCH_COOLDOWN_UNTIL - now)
+            return SearchResult(
+                query, base_url, [], True,
+                f"searxng_cooldown: upstream quota or CAPTCHA failure; retry in {remaining} seconds",
+                fetched_at,
             )
-        )
-    unresponsive = payload.get("unresponsive_engines")
-    degraded = bool(unresponsive)
-    error = f"unresponsive_engines: {unresponsive}" if degraded else None
-    return SearchResult(query, base_url, items, degraded, error, fetched_at)
+        if _SEARCH_LAST_REQUEST_AT is not None:
+            wait = _SEARCH_MIN_INTERVAL - (now - _SEARCH_LAST_REQUEST_AT)
+            if wait > 0:
+                time.sleep(wait)
+        _SEARCH_LAST_REQUEST_AT = time.monotonic()
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                body = response.read(max_bytes + 1)
+        except urllib.error.HTTPError as exc:
+            error = f"searxng_unreachable: {exc}"
+            if exc.code == 429:
+                _SEARCH_COOLDOWN_UNTIL = time.monotonic() + _SEARCH_FAILURE_COOLDOWN
+                error += "; search cooldown 120 seconds after HTTP 429"
+            exc.close()
+            return SearchResult(query, base_url, [], True, error, fetched_at)
+        except (urllib.error.URLError, OSError, TimeoutError) as exc:
+            return SearchResult(query, base_url, [], True, f"searxng_unreachable: {exc}", fetched_at)
+
+        if len(body) > max_bytes:
+            return SearchResult(query, base_url, [], True, "response_too_large", fetched_at)
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            return SearchResult(query, base_url, [], True, "invalid_json_response", fetched_at)
+        if not isinstance(payload, dict):
+            return SearchResult(query, base_url, [], True, "invalid_json_response", fetched_at)
+
+        items = []
+        for entry in payload.get("results", []) or []:
+            if not isinstance(entry, dict) or not entry.get("url"):
+                continue
+            items.append(
+                SearchResultItem(
+                    title=entry.get("title") or entry["url"],
+                    url=entry["url"],
+                    content=entry.get("content"),
+                    engine=entry.get("engine"),
+                )
+            )
+        unresponsive = payload.get("unresponsive_engines")
+        degraded = bool(unresponsive)
+        error = f"unresponsive_engines: {unresponsive}" if degraded else None
+        if not items and degraded and _search_quota_failure(error):
+            _SEARCH_COOLDOWN_UNTIL = time.monotonic() + _SEARCH_FAILURE_COOLDOWN
+            error += "; search cooldown 120 seconds after upstream quota or CAPTCHA failure"
+        return SearchResult(query, base_url, items, degraded, error, fetched_at)

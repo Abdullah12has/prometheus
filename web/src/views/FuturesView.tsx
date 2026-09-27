@@ -12,10 +12,11 @@
 //   GET  /api/scenarios?company_id=...
 //   POST /api/sources                 (only when the user attaches a source)
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Compass, Plus, ShieldCheck, FlaskConical, ChevronDown, ChevronRight } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
-import type { Company, CompanyListResponse } from '../lib/types'
+import type { Company } from '../lib/types'
+import { CompanyPicker } from '../components/CompanyPicker'
 import { LoadingBlock, ErrorBlock, EmptyState } from '../components/StateViews'
 import { useToast } from '../lib/toast'
 import {
@@ -320,10 +321,8 @@ async function maybeCreateSource(
 }
 
 export function FuturesView() {
-  const [companies, setCompanies] = useState<Company[] | null>(null)
-  const [companiesStatus, setCompaniesStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [companiesError, setCompaniesError] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<string>(() => new URLSearchParams(window.location.search).get('company') ?? '')
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
 
   const [preferences, setPreferences] = useState<PreferenceList | null>(null)
   const [prefStatus, setPrefStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -331,24 +330,6 @@ export function FuturesView() {
 
   const [scenarios, setScenarios] = useState<ScenarioOut[] | null>(null)
   const [scenarioListStatus, setScenarioListStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
-
-  function loadCompanies() {
-    setCompaniesStatus('loading')
-    setCompaniesError(null)
-    api
-      .get<CompanyListResponse | Company[]>('/api/companies')
-      .then((response) => {
-        const list = Array.isArray(response) ? response : response.items
-        setCompanies(list)
-        setCompaniesStatus('ready')
-      })
-      .catch((cause) => {
-        setCompaniesError(cause instanceof ApiError ? cause.message : 'Could not load companies.')
-        setCompaniesStatus('error')
-      })
-  }
-
-  useEffect(loadCompanies, [])
 
   function loadPreferences(id: string) {
     if (!id) return
@@ -389,8 +370,6 @@ export function FuturesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId])
 
-  const selectedCompany = useMemo(() => companies?.find((c) => c.id === companyId) ?? null, [companies, companyId])
-
   return (
     <div className="page">
       <header className="page__header">
@@ -403,21 +382,8 @@ export function FuturesView() {
 
       <div className="company-picker">
         <label htmlFor="futures-company">Company</label>
-        {companiesStatus === 'loading' && <LoadingBlock label="Loading companies…" />}
-        {companiesStatus === 'error' && (
-          <ErrorBlock message={companiesError ?? 'Could not load companies.'} onRetry={loadCompanies} />
-        )}
-        {companiesStatus === 'ready' && (
-          <select id="futures-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-            <option value="">Select a company…</option>
-            {(companies ?? []).map((c) => (
-              <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>
-            ))}
-          </select>
-        )}
-        {companiesStatus === 'ready' && (companies ?? []).length === 0 && (
-          <p className="muted small">No companies yet. Add one from the Companies view first.</p>
-        )}
+        <CompanyPicker id="futures-company" value={companyId} onChange={(value) => setCompanyId(String(value))}
+          onResolved={(items) => setSelectedCompany(items[0] ?? null)} />
       </div>
 
       {!companyId && (

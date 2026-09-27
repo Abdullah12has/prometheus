@@ -1,8 +1,10 @@
 import itertools
 import json
 import sys
+import threading
 import unittest
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
@@ -699,6 +701,23 @@ class ResearchWebsiteTests(unittest.TestCase):
 
 
 class SearchWebTests(unittest.TestCase):
+    def setUp(self):
+        self.clock = 0.0
+
+        def monotonic():
+            return self.clock
+
+        def sleep(seconds):
+            self.clock += seconds
+
+        self.sleep = mock.Mock(side_effect=sleep)
+        patcher = mock.patch.object(acquisition, "time", mock.Mock(monotonic=monotonic, sleep=self.sleep))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        with acquisition._SEARCH_LOCK:
+            acquisition._SEARCH_LAST_REQUEST_AT = None
+            acquisition._SEARCH_COOLDOWN_UNTIL = 0.0
+
     def test_parses_results_from_local_searxng(self):
         payload = {
             "results": [
@@ -753,6 +772,105 @@ class SearchWebTests(unittest.TestCase):
         with mock.patch.object(acquisition.urllib.request, "urlopen", return_value=_Resp()):
             result = acquisition.search_web("acme oy")
         self.assertTrue(result.degraded)
+
+    def test_spaces_requests_and_cools_down_after_quota_or_captcha_failure(self):
+        payload = {"results": [], "unresponsive_engines": [
+            ["brave", "Suspended: too many requests"], ["duckduckgo", "CAPTCHA"]
+        ]}
+        body = json.dumps(payload).encode()
+
+        class _Resp:
+            def read(self, n=None):
+                return body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(acquisition.urllib.request, "urlopen", return_value=_Resp()) as urlopen:
+            result = acquisition.search_web("acme oy")
+            self.assertTrue(result.degraded)
+            self.assertIn("cooldown 120 seconds", result.error)
+
+            cooled = acquisition.search_web("other oy")
+            self.assertTrue(cooled.degraded)
+            self.assertIn("retry in 120 seconds", cooled.error)
+            self.assertEqual(urlopen.call_count, 1)
+
+            self.clock += 120
+            acquisition.search_web("after cooldown")
+            self.assertEqual(urlopen.call_count, 2)
+
+        self.sleep.assert_not_called()
+
+    def test_waits_five_seconds_between_healthy_search_requests(self):
+        body = json.dumps({"results": []}).encode()
+
+        class _Resp:
+            def read(self, n=None):
+                return body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(acquisition.urllib.request, "urlopen", return_value=_Resp()) as urlopen:
+            acquisition.search_web("first oy")
+            acquisition.search_web("second oy")
+        self.assertEqual(urlopen.call_count, 2)
+        self.sleep.assert_called_once_with(5.0)
+
+    def test_serializes_requests_from_concurrent_research_threads(self):
+        body = json.dumps({"results": []}).encode()
+
+        class _Resp:
+            def read(self, n=None):
+                return body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        first_entered = threading.Event()
+        release_first = threading.Event()
+        second_entered = threading.Event()
+
+        def urlopen(*args, **kwargs):
+            if first_entered.is_set():
+                second_entered.set()
+            else:
+                first_entered.set()
+                release_first.wait(1)
+            return _Resp()
+
+        with mock.patch.object(acquisition.urllib.request, "urlopen", side_effect=urlopen):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(acquisition.search_web, "first oy")
+                self.assertTrue(first_entered.wait(1))
+                second = pool.submit(acquisition.search_web, "second oy")
+                self.assertFalse(second_entered.wait(0.05))
+                release_first.set()
+                first.result(timeout=1)
+                second.result(timeout=1)
+
+        self.assertTrue(second_entered.is_set())
+        self.sleep.assert_called_once_with(5.0)
+
+    def test_http_429_starts_cooldown(self):
+        error = urllib.error.HTTPError("http://searxng/search", 429, "Too Many Requests", {}, None)
+        with mock.patch.object(acquisition.urllib.request, "urlopen", side_effect=error) as urlopen:
+            result = acquisition.search_web("acme oy")
+            self.assertTrue(result.degraded)
+            self.assertIn("HTTP 429", result.error)
+            cooled = acquisition.search_web("other oy")
+        self.assertIn("retry in 120 seconds", cooled.error)
+        self.assertEqual(urlopen.call_count, 1)
 
 
 if __name__ == "__main__":

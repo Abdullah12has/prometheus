@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
 import type { Company, CompanyDetail, Contact } from '../lib/types'
+import { CompanyPicker } from '../components/CompanyPicker'
 import type {
   ClassifyInput, Conversation, ConversationDetail, DraftCreateInput, Enrollment, GmailConnectResponse,
   GmailDisconnectResponse, GmailStatus, GmailSyncResponse, MailMessage, OutreachControls, OutreachDraft,
@@ -57,6 +58,8 @@ interface Directory {
   companyName: (id: string) => string
   contactsFor: (companyId: string) => Contact[] | undefined
   ensureContacts: (companyId: string) => void
+  ensureCompany: (companyId: string) => void
+  rememberCompanies: (companies: Company[]) => void
   contactLabel: (companyId: string, contactId: string | null) => string
   reloadCompanies: () => void
 }
@@ -66,13 +69,17 @@ function useDirectory(): Directory {
   const [companiesStatus, setCompaniesStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [contactsByCompany, setContactsByCompany] = useState<Record<string, Contact[]>>({})
   const pending = useRef<Set<string>>(new Set())
+  const pendingCompanies = useRef<Set<string>>(new Set())
+  const knownCompanyIds = useRef<Set<string>>(new Set())
 
   const reloadCompanies = useCallback(() => {
     setCompaniesStatus('loading')
     api
       .get<{ items: Company[]; total: number } | Company[]>('/api/companies')
       .then((response) => {
-        setCompanies(Array.isArray(response) ? response : response.items)
+        const items = Array.isArray(response) ? response : response.items
+        knownCompanyIds.current = new Set(items.map((company) => company.id))
+        setCompanies(items)
         setCompaniesStatus('ready')
       })
       .catch(() => setCompaniesStatus('error'))
@@ -85,11 +92,35 @@ function useDirectory(): Directory {
     pending.current.add(companyId)
     api
       .get<CompanyDetail>(`/api/companies/${companyId}`)
-      .then((detail) => setContactsByCompany((current) => ({ ...current, [companyId]: detail.contacts })))
+      .then((detail) => {
+        setContactsByCompany((current) => ({ ...current, [companyId]: detail.contacts }))
+        knownCompanyIds.current.add(detail.id)
+        setCompanies((current) => current.some((company) => company.id === detail.id) ? current : [...current, detail])
+      })
       .catch(() => setContactsByCompany((current) => ({ ...current, [companyId]: [] })))
       .finally(() => pending.current.delete(companyId))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactsByCompany])
+
+  const ensureCompany = useCallback((companyId: string) => {
+    if (!companyId || knownCompanyIds.current.has(companyId) || pendingCompanies.current.has(companyId)) return
+    pendingCompanies.current.add(companyId)
+    api.get<CompanyDetail>(`/api/companies/${encodeURIComponent(companyId)}`)
+      .then((detail) => {
+        knownCompanyIds.current.add(detail.id)
+        setCompanies((current) => current.some((company) => company.id === detail.id) ? current : [...current, detail])
+      })
+      .catch(() => undefined)
+      .finally(() => pendingCompanies.current.delete(companyId))
+  }, [])
+
+  const rememberCompanies = useCallback((items: Company[]) => {
+    if (items.length) setCompanies((current) => {
+      const byId = new Map(current.map((company) => [company.id, company]))
+      items.forEach((company) => { knownCompanyIds.current.add(company.id); byId.set(company.id, company) })
+      return Array.from(byId.values())
+    })
+  }, [])
 
   const companyName = useCallback(
     (id: string) => companies.find((c) => c.id === id)?.name || 'Unknown company',
@@ -108,7 +139,7 @@ function useDirectory(): Directory {
     [contactsByCompany, ensureContacts],
   )
 
-  return { companies, companiesStatus, companyName, contactsFor, ensureContacts, contactLabel, reloadCompanies }
+  return { companies, companiesStatus, companyName, contactsFor, ensureContacts, ensureCompany, rememberCompanies, contactLabel, reloadCompanies }
 }
 
 /** Inline link to the company detail page plus the resolved contact name — shown next to verification errors. */
@@ -316,9 +347,9 @@ function InboxTab({ dir }: { dir: Directory }) {
   const loadList = useCallback(() => {
     setStatus('loading'); setError(null)
     api.get<Conversation[]>('/api/outreach/conversations')
-      .then((items) => { setConversations(items); setStatus('ready') })
+      .then((items) => { setConversations(items); items.forEach((item) => dir.ensureCompany(item.company_id)); setStatus('ready') })
       .catch((cause) => { setError(errorMessage(cause, 'Could not load conversations.')); setStatus('error') })
-  }, [])
+  }, [dir.ensureCompany])
   useEffect(loadList, [loadList])
 
   const loadDetail = useCallback((id: string) => {
@@ -601,11 +632,9 @@ function NewDraftForm({ dir, onCreated }: { dir: Directory; onCreated: () => voi
     <form className="stack-form panel" onSubmit={submit}>
       <h2>New draft</h2>
       {formError && <p className="field-error" role="alert">{formError}</p>}
-      <label>Company</label>
-      <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setContactId('') }} required>
-        <option value="">Select a company…</option>
-        {dir.companies.map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-      </select>
+      <label htmlFor="draft-company">Company</label>
+      <CompanyPicker id="draft-company" value={companyId} onChange={(value) => { const id = String(value); setCompanyId(id); setContactId('') }}
+        required onResolved={dir.rememberCompanies} />
       <label>Contact</label>
       <select value={contactId} onChange={(e) => setContactId(e.target.value)} required disabled={!companyId}>
         <option value="">{contacts === undefined ? (companyId ? 'Loading contacts…' : 'Choose a company first') : contacts.length === 0 ? 'No contacts recorded' : 'Select a contact…'}</option>
@@ -644,9 +673,9 @@ function DraftsTab({ dir }: { dir: Directory }) {
     if (companyFilter) params.set('company_id', companyFilter)
     const query = params.toString()
     api.get<OutreachDraft[]>(`/api/outreach/drafts${query ? `?${query}` : ''}`)
-      .then((items) => { setDrafts(items); setStatus('ready') })
+      .then((items) => { setDrafts(items); items.forEach((item) => dir.ensureCompany(item.company_id)); setStatus('ready') })
       .catch((cause) => { setError(errorMessage(cause, 'Could not load drafts.')); setStatus('error') })
-  }, [statusFilter, companyFilter])
+  }, [statusFilter, companyFilter, dir.ensureCompany])
   useEffect(load, [load])
 
   return (
@@ -657,10 +686,9 @@ function DraftsTab({ dir }: { dir: Directory }) {
             <option value="">All statuses</option>
             {['draft', 'approved', 'sending', 'sent', 'delivery_unknown', 'failed'].map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
-          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} aria-label="Filter by company">
-            <option value="">All companies</option>
-            {dir.companies.map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-          </select>
+          <CompanyPicker id="draft-company-filter" value={companyFilter} onChange={(value) => setCompanyFilter(String(value))}
+            emptyLabel="All companies" searchLabel="Search companies to filter drafts" selectLabel="Filter by company"
+            onResolved={dir.rememberCompanies} />
         </div>
         <button type="button" className="btn btn--primary" onClick={() => setShowNew((v) => !v)}>
           <Plus size={14} aria-hidden="true" /> {showNew ? 'Close' : 'New draft'}
@@ -802,10 +830,9 @@ function TemplateApprovalForm({ sequence, stepIndex, dir, onCreated }: { sequenc
       }}
     >
       {error && <p className="field-error" role="alert">{error}</p>}
-      <label>Companies this preauthorization covers</label>
-      <select multiple value={companyIds} onChange={(e) => setCompanyIds(Array.from(e.target.selectedOptions).map((o) => o.value))} style={{ minHeight: 90 }}>
-        {dir.companies.map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-      </select>
+      <label htmlFor="template-approval-companies">Companies this preauthorization covers</label>
+      <CompanyPicker id="template-approval-companies" value={companyIds} multiple
+        onChange={(value) => setCompanyIds(Array.isArray(value) ? value : [])} onResolved={dir.rememberCompanies} />
       <label>Expires in (hours, max 720)</label>
       <input type="number" min={1} max={720} value={hours} onChange={(e) => setHours(Number(e.target.value))} />
       <button className="btn btn--secondary" disabled={saving}>{saving ? 'Authorizing…' : `Authorize template for step ${stepIndex}`}</button>
@@ -824,7 +851,10 @@ function SequenceCard({ sequence, dir, onReload }: { sequence: Sequence; dir: Di
   const { push } = useToast()
 
   function loadEnrollments() {
-    api.get<Enrollment[]>(`/api/outreach/enrollments?sequence_id=${sequence.id}`).then(setEnrollments).catch(() => setEnrollments([]))
+    api.get<Enrollment[]>(`/api/outreach/enrollments?sequence_id=${sequence.id}`).then((items) => {
+      setEnrollments(items)
+      items.forEach((item) => dir.ensureCompany(item.company_id))
+    }).catch(() => setEnrollments([]))
   }
 
   async function togglePause() {
@@ -955,11 +985,9 @@ function EnrollForm({ sequence, dir, onEnrolled }: { sequence: Sequence; dir: Di
   return (
     <form className="stack-form" onSubmit={submit}>
       {error && <p className="field-error" role="alert">{error}</p>}
-      <label>Company</label>
-      <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setContactId('') }} required>
-        <option value="">Select a company…</option>
-        {dir.companies.map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-      </select>
+      <label htmlFor="enroll-company">Company</label>
+      <CompanyPicker id="enroll-company" value={companyId} onChange={(value) => { const id = String(value); setCompanyId(id); setContactId('') }}
+        required onResolved={dir.rememberCompanies} />
       <label>Contact (verified only)</label>
       <select value={contactId} onChange={(e) => setContactId(e.target.value)} required disabled={!companyId}>
         <option value="">{contacts === undefined ? 'Loading…' : 'Select a contact…'}</option>
@@ -1043,10 +1071,8 @@ function SuppressionForm({ dir, onAdd }: { dir: Directory; onAdd: (input: Suppre
         <div className="field-col">
           <label>Value</label>
           {kind === 'company' ? (
-            <select value={value} onChange={(e) => setValue(e.target.value)} required>
-              <option value="">Select a company…</option>
-              {dir.companies.map((c) => <option key={c.id} value={c.id}>{c.name || 'Unnamed company'}</option>)}
-            </select>
+            <CompanyPicker id="suppression-company" value={value} onChange={(next) => setValue(String(next))}
+              required onResolved={dir.rememberCompanies} />
           ) : kind === 'channel' ? (
             <input value="email" readOnly disabled />
           ) : (
@@ -1072,9 +1098,9 @@ function ControlsTab({ dir }: { dir: Directory }) {
   const load = useCallback(() => {
     setStatus('loading')
     Promise.all([api.get<OutreachControls>('/api/outreach/controls'), api.get<Suppression[]>('/api/outreach/suppressions')])
-      .then(([c, s]) => { setControls(c); setSuppressions(s); setStatus('ready') })
+      .then(([c, s]) => { setControls(c); setSuppressions(s); s.filter((item) => item.kind === 'company').forEach((item) => dir.ensureCompany(item.value)); setStatus('ready') })
       .catch(() => setStatus('error'))
-  }, [])
+  }, [dir.ensureCompany])
   useEffect(load, [load])
 
   async function toggleStop() {
@@ -1195,7 +1221,7 @@ export function OutreachView() {
   }, [])
 
   return (
-    <div className="page outreach" style={{ maxWidth: 1080 }}>
+    <div className="page outreach">
       <header className="page__header">
         <h1>Outreach</h1>
         <p className="page__lede">Connect Gmail, review replies, and approve every message by hand before it sends. Nothing sends or auto-approves on its own.</p>
@@ -1203,7 +1229,7 @@ export function OutreachView() {
 
       <GmailConnectionCard status={gmailStatus} onChange={loadGmailStatus} />
 
-      <nav className="outreach-tabs" aria-label="Outreach sections">
+      <nav className="view-tabs" aria-label="Outreach sections">
         {TABS.map((item) => (
           <button type="button" key={item} className={tab === item ? 'is-active' : ''} aria-current={tab === item ? 'page' : undefined} onClick={() => setTab(item)}>{item}</button>
         ))}

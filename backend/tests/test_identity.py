@@ -17,6 +17,10 @@ def test_other_jurisdictions_normalize_without_checksum():
     assert normalize_business_id("SE", "556012 5790") == "5560125790"
     with pytest.raises(ValueError):
         normalize_business_id("SE", "55<script>")
+    assert normalize_business_id("CH", "CHE116229879") == "CHE-116.229.879"
+    assert normalize_business_id("CH", "che-116.229.879") == "CHE-116.229.879"
+    with pytest.raises(ValueError):
+        normalize_business_id("CH", "CHE123")
 
 
 def test_name_normalization_strips_trailing_legal_forms():

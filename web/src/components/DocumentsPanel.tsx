@@ -143,7 +143,7 @@ export function DocumentsPanel({ companyId, onUpdated }: DocumentsPanelProps) {
   const isLoading = loading || loadedCompanyId !== companyId
 
   return (
-    <section className="documents-panel" aria-labelledby="documents-heading">
+    <section className="panel documents-panel" aria-labelledby="documents-heading">
       <div className="documents-panel__heading">
         <div>
           <h2 id="documents-heading">Financial documents</h2>

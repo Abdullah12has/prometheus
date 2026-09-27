@@ -1,3 +1,4 @@
+import json
 from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
@@ -57,6 +58,14 @@ def test_forbidden_delete_tool_is_rejected():
         assert response.json()["actions"][0]["kind"] == "error"
         assert response.json()["actions"][0]["status"] == 400
         assert client.get(f"/api/companies/{company['id']}").status_code == 200
+
+
+def test_browser_actions_open_the_requested_voice_workspace():
+    for kind, target in [("open_recorder", "/voice-notes?tab=notes"), ("open_voice", "/voice-notes")]:
+        with run([tool("browser_action", json.dumps({"kind": kind})), {"content": "Open the workspace."}]) as client:
+            response = client.post("/api/assistant", json={"message": kind})
+            assert response.status_code == 200
+            assert response.json()["actions"][0]["link"] == target
 
 
 def test_invalid_domain_body_is_rejected_by_api_schema():

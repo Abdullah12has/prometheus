@@ -26,6 +26,14 @@ ALLOWED = {
     ("GET", "/api/companies/{company_id}/coverage"),
     ("GET", "/api/research/runs"), ("POST", "/api/discovery/runs"),
     ("GET", "/api/discovery/runs"), ("GET", "/api/discovery/runs/{run_id}"),
+    ("GET", "/api/registry/sources"), ("GET", "/api/registry/status"),
+    ("GET", "/api/registry/imports"), ("POST", "/api/registry/imports"),
+    ("GET", "/api/registry/imports/{import_id}"),
+    ("POST", "/api/registry/imports/{import_id}/pause"),
+    ("POST", "/api/registry/imports/{import_id}/resume"),
+    ("GET", "/api/registry/enrichment"), ("POST", "/api/registry/enrichment"),
+    ("POST", "/api/registry/enrichment/{campaign_id}/pause"),
+    ("POST", "/api/registry/enrichment/{campaign_id}/resume"),
     ("POST", "/api/jobs/{job_id}/retry"), ("POST", "/api/jobs/{job_id}/cancel"),
     ("GET", "/api/companies/{company_id}/documents"), ("GET", "/api/documents/{document_id}"),
     ("GET", "/api/companies"), ("POST", "/api/companies"),
@@ -238,17 +246,13 @@ def _guard_write(template: str, method: str, body: Any, path_params: dict | None
 def _ui_link(path: str) -> str:
     if path.startswith("/api/notes"):
         return "/voice-notes?tab=notes"
-    if path.startswith("/api/match-runs"):
+    if path.startswith("/api/voice/"):
+        return "/voice-notes"
+    if path.startswith(("/api/match-runs", "/api/opportunities", "/api/simulations", "/api/historical-deals", "/api/deals", "/api/mandates")):
         return "/matches"
-    if path.startswith("/api/opportunities"):
-        return "/outreach"
     if path.startswith("/api/outreach"):
         return "/outreach"
-    if path.startswith("/api/simulations"):
-        return "/matches"
-    if path.startswith("/api/historical-deals") or path.startswith("/api/deals"):
-        return "/futures"
-    if path.startswith("/api/mandates") or path.startswith("/api/scenarios") or path.startswith("/api/companies/") and "/preferences" in path or path.startswith("/api/voice/"):
+    if path.startswith("/api/scenarios") or path.startswith("/api/companies/") and "/preferences" in path:
         return "/futures"
     return "/companies"
 
@@ -308,7 +312,7 @@ async def chat(body: AssistantIn, request: Request, session=Depends(require_sess
                         status, result, path = 400, {"error": "Invalid browser action"}, ""
                         actions.append({"kind": "error", "tool": name, "status": status, "result": result})
                     else:
-                        path = args.get("path") if args["kind"] == "navigate" and args.get("path") in {"/companies", "/futures", "/matches", "/outreach", "/voice-notes"} else {"open_recorder": "/voice-notes", "open_voice": "/futures"}.get(args["kind"], "")
+                        path = args.get("path") if args["kind"] == "navigate" and args.get("path") in {"/companies", "/futures", "/matches", "/outreach", "/voice-notes"} else {"open_recorder": "/voice-notes?tab=notes", "open_voice": "/voice-notes"}.get(args["kind"], "")
                         if args["kind"] == "navigate" and not path:
                             status, result = 400, {"error": "Navigation path is not an available UI route"}
                             actions.append({"kind": "error", "tool": name, "status": status, "result": result})

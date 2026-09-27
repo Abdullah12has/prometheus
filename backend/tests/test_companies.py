@@ -67,6 +67,7 @@ def test_list_detail_update_and_search(client):
     assert r.json()["domain"] == "acme.com" and r.json()["status"] == "confirmed"
     assert client.get("/api/companies", params={"q": "acme"}).json()["total"] == 1
     assert client.get("/api/companies", params={"q": "0112038-9"}).json()["items"][0]["id"] == cid
+    assert client.get("/api/companies", params={"q": "FI01120389"}).json()["items"][0]["id"] == cid
     assert client.get("/api/companies", params={"status": "confirmed"}).json()["total"] == 1
 
     detail = client.get(f"/api/companies/{cid}").json()
@@ -92,6 +93,13 @@ def test_country_filter_keeps_pagination_and_search_within_country(client):
     assert first["items"][0]["country"] == second["items"][0]["country"] == "CH"
     assert first["items"][0]["id"] != second["items"][0]["id"]
     assert client.get("/api/companies", params={"country": "Germany"}).status_code == 422
+
+
+def test_swiss_uid_dedup_and_search_accept_both_common_formats(client):
+    company = create(client, name="Karara AG", country="CH", business_id="CHE-116.229.879").json()["company"]
+    repeated = create(client, name="Karara", country="CH", business_id="CHE116229879")
+    assert repeated.json()["company"]["id"] == company["id"]
+    assert client.get("/api/companies", params={"q": "CHE116229879"}).json()["items"][0]["id"] == company["id"]
 
 
 def test_delete_cancels_jobs_and_leaves_content_free_tombstone(client):

@@ -213,10 +213,16 @@ def list_companies(q: str | None = Query(None, max_length=200), status: CompanyS
     query = select(Company)
     if q and q.strip():
         term = q.strip()
+        identifiers = {term.upper()}
+        for jurisdiction in ("FI", "CH"):
+            try:
+                identifiers.add(normalize_business_id(jurisdiction, term))
+            except ValueError:
+                pass
         query = query.where(or_(
             Company.name_normalized.contains(normalize_name(term), autoescape=True),
             Company.domain.contains(term.lower(), autoescape=True),
-            Company.id.in_(select(CompanyIdentifier.company_id).where(CompanyIdentifier.value == term.upper())),
+            Company.id.in_(select(CompanyIdentifier.company_id).where(CompanyIdentifier.value.in_(identifiers))),
         ))
     if status:
         query = query.where(Company.status == status)

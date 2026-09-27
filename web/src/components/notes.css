@@ -3,7 +3,7 @@
    instead of duplicating them. */
 
 .notes-panel {
-  max-width: 880px;
+  min-width: 0;
 }
 
 /* ---------- Recovery banner ---------- */
@@ -119,16 +119,18 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 13px 16px;
+  padding: 12px 16px;
   background: none;
   border: none;
+  font: inherit;
   cursor: pointer;
   text-align: left;
   color: var(--color-navy);
+  transition: background var(--transition-fast);
 }
 
 .notes-list__header:hover {
-  background: var(--color-navy-faint);
+  background: var(--bg-subtle);
 }
 
 .notes-list__title {
@@ -168,9 +170,8 @@
 }
 
 .notes-detail__title-edit input {
-  border: 1px solid var(--color-navy-border);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  width: auto;
+  min-width: 14rem;
 }
 
 .notes-danger-btn {
@@ -215,8 +216,9 @@
 .notes-segments__seek {
   flex-shrink: 0;
   border: none;
-  background: var(--color-navy-faint);
-  color: var(--color-cobalt-strong);
+  background: var(--bg-muted);
+  color: var(--text-strong);
+  font-family: var(--font-mono);
   border-radius: var(--radius-sm);
   padding: 2px 7px;
   font-size: 12px;
@@ -225,7 +227,7 @@
 }
 
 .notes-segments__seek:hover {
-  background: var(--color-cobalt-faint);
+  background: var(--bg-active);
 }
 
 .notes-segments mark {
@@ -266,12 +268,9 @@
 }
 
 .notes-detail__transcript-col textarea {
-  border: 1px solid var(--color-navy-border);
-  border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 13px;
   line-height: 1.55;
-  resize: vertical;
 }
 
 /* ---------- Summary ---------- */
@@ -281,14 +280,12 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px;
-  border: 1px solid var(--color-teal-faint);
-  background: var(--color-teal-faint);
+  background: var(--bg-subtle);
   border-radius: var(--radius-md);
 }
 
 .notes-summary h3 {
-  font-size: 13.5px;
-  color: var(--color-teal);
+  font-size: 14px;
 }
 
 .notes-summary__list {

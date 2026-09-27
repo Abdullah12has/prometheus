@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
-from . import auth, companies, contacts, errors, provenance, workspace, notes, deals, mail, voice, assistant, documents, research, background
+from . import auth, companies, contacts, errors, provenance, workspace, notes, deals, mail, voice, assistant, documents, research, background, registry
 from .config import Settings
 from .db import init_db, make_engine, make_sessionmaker
 from .speech_runtime import SpeechRuntime
@@ -22,6 +22,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(_: FastAPI):
         try:
             init_db(engine)
+            registry.init(engine)
         except SQLAlchemyError as exc:
             # Boot anyway; /api/health reports the database as unavailable.
             log.error("database bootstrap failed: %s", exc)
@@ -46,7 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=sorted(settings.allowed_origins), allow_credentials=True,
                        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type", "X-CSRF-Token"])
     errors.install(app)
-    for module in (auth, workspace, companies, contacts, provenance, notes, deals, mail, voice, assistant, documents, research):
+    for module in (auth, workspace, companies, contacts, provenance, notes, deals, mail, voice, assistant, documents, research, registry):
         app.include_router(module.router)
     app.include_router(workspace.public)
     app.include_router(mail.oauth_router)

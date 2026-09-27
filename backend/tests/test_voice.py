@@ -31,6 +31,7 @@ class FakeRuntime:
         self.final_text = "hello there"
         self.tts_delay, self.tts_chunks = 0.0, 3
         self.spoken, self.fed, self.cancelled, self.cloned = [], 0, [], []
+        self.fail_next_clone = False
 
     async def asr_start(self, request_id):
         assert self.asr_lock.locked(), "live ASR must run while the conversation holds asr_lock"
@@ -53,6 +54,9 @@ class FakeRuntime:
             yield 24000, b"\x01\x00" * 240
 
     async def clone_voice(self, source, target):
+        if self.fail_next_clone:
+            self.fail_next_clone = False
+            raise RuntimeError("synthetic clone failure")
         with wave.open(str(source)) as w:
             self.cloned.append((w.getframerate(), w.readframes(w.getnframes())))
         Path(target).write_bytes(b"voice-state")
@@ -130,6 +134,7 @@ def wav_bytes(seconds, rate=24000):
 
 
 AUTHORIZATION = {"voice_owner_name": "Aino Virtanen", "owner_authorization": "true", "authorization_basis": "self"}
+CONSENT = {"consent_action": "create_own_voice"}  # current contract: no checkbox fields
 
 
 # ---------- agents ----------
@@ -138,7 +143,7 @@ def test_agents_require_auth_csrf_and_ai_disclosure(v):
     r = v.client.post("/api/voice/agents", json={"name": "Sam", "introduction": "Hi, this is Sam from the team."})
     assert r.status_code == 422 and "AI" in r.text
     agent = make_agent(v)
-    assert agent["voice"]["kind"] == "default" and "not cloned" in agent["voice"]["label"]
+    assert agent["voice"]["kind"] == "default" and agent["voice"]["label"] == "Default voice"
     assert "profile_path" not in agent
 
     r = v.client.patch(f"/api/voice/agents/{agent['id']}", json={"introduction": "Hello, I am Sam."})
@@ -218,6 +223,54 @@ def test_voice_clone_preview_and_default_switch(v):
     busy = v.client.get(f"/api/voice/agents/{agent_id}/preview")
     v.runtime.asr_lock.release()
     assert busy.status_code == 409 and busy.json()["error"]["code"] == "voice_busy"
+
+
+@needs_ffmpeg
+def test_voice_sample_create_own_voice_consent_records_initiation_audit(v):
+    """Current contract: no owner-name/checkbox fields, just the explicit action, and the server
+    records who/when initiated it instead of fabricating a checked consent record."""
+    agent_id = make_agent(v)["id"]
+    good, frames = wav_bytes(5)
+    r = v.client.post(f"/api/voice/agents/{agent_id}/voice-sample",
+                      files={"sample": ("s.wav", good, "audio/wav")}, data=CONSENT)
+    assert r.status_code == 200, r.text
+    auth = r.json()["voice"]["authorization"]
+    assert auth["consent_action"] == "create_own_voice" and auth["basis"] == "operator_provided"
+    assert auth["voice_owner_name"] is None
+    assert isinstance(auth["initiated_by"]["session_id"], str) and auth["initiated_by"]["session_id"]
+    assert v.runtime.cloned == [(24000, frames)]
+
+
+def test_voice_sample_rejects_missing_consent_signal(v):
+    agent_id = make_agent(v)["id"]
+    good, _ = wav_bytes(5)
+    # No consent_action and no legacy authorization fields: never silently treated as authorized.
+    r = v.client.post(f"/api/voice/agents/{agent_id}/voice-sample", files={"sample": ("s.wav", good, "audio/wav")})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "authorization_required"
+
+
+@needs_ffmpeg
+def test_failed_clone_preserves_previous_voice_and_retry_reuses_same_agent(v):
+    agent_id = make_agent(v)["id"]
+    good, frames = wav_bytes(5)
+    url = f"/api/voice/agents/{agent_id}/voice-sample"
+
+    v.runtime.fail_next_clone = True
+    r = v.client.post(url, files={"sample": ("s.wav", good, "audio/wav")}, data=CONSENT)
+    assert r.status_code == 503 and r.json()["error"]["code"] == "voice_clone_failed"
+
+    agent = next(a for a in v.client.get("/api/voice/agents").json() if a["id"] == agent_id)
+    assert agent["voice"]["kind"] == "default"  # previous (bundled) voice untouched by the failure
+    folder = v.root / "voices" / agent_id
+    assert not folder.exists() or list(folder.iterdir()) == []  # no orphaned partial state
+
+    # Retry against the same agent id (no duplicate agent created) with the same sample succeeds.
+    r = v.client.post(url, files={"sample": ("s.wav", good, "audio/wav")}, data=CONSENT)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["id"] == agent_id and body["voice"]["kind"] == "cloned"
+    assert v.runtime.cloned == [(24000, frames)]
+    assert len(v.client.get("/api/voice/agents").json()) == 1  # still exactly one agent
 
 
 # ---------- browser sessions ----------

@@ -67,6 +67,11 @@ def _is_ip(host: str) -> bool:
 
 def normalize_business_id(country: str, value: str) -> str:
     compact = re.sub(r"\s", "", value).upper()
+    if country == "CH" and compact.startswith("CHE"):
+        uid = re.sub(r"[.-]", "", compact)
+        if not re.fullmatch(r"CHE\d{9}", uid):
+            raise ValueError("Swiss UID must look like CHE-123.456.789")
+        return f"CHE-{uid[3:6]}.{uid[6:9]}.{uid[9:12]}"
     if country != "FI":
         if not GENERIC_ID.match(compact):
             raise ValueError("business_id contains unsupported characters")

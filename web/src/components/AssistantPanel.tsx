@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { Sparkles, PanelRightClose, PanelRightOpen, Send, Plus, MessageSquare, ArrowUpRight } from 'lucide-react'
+import { Sparkles, X, ArrowUp, Plus, MessageSquare, ArrowUpRight } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
 import { useRouter } from '../lib/router'
 import './assistant.css'
@@ -8,7 +8,7 @@ type Action = { kind: string; tool?: string; status?: number; link?: string; pat
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; actions: Action[]; created_at?: string }
 type Conversation = { id: string; title: string; updated_at: string }
 type ConversationDetail = { id: string; title: string; messages: ChatMessage[] }
-const allowedLinks = new Set(['/companies', '/futures', '/matches', '/outreach', '/voice-notes'])
+const allowedLinks = new Set(['/companies', '/futures', '/matches', '/outreach', '/voice-notes', '/voice-notes?tab=notes'])
 const errorText = (cause: unknown) => cause instanceof ApiError ? cause.message : cause instanceof Error ? cause.message : 'The assistant request failed.'
 function friendlyName(name?: string) { return (name || 'Workspace update').replace(/^(get|post|patch)_/i, '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) }
 function actionsFrom(error: ApiError): Action[] { const value = error.detail; return value && typeof value === 'object' && 'actions' in value && Array.isArray(value.actions) ? value.actions as Action[] : [] }
@@ -23,8 +23,7 @@ function resultSummary(result: unknown) {
 }
 function needsHumanReview(result: unknown) { return !!result && typeof result === 'object' && 'review_status' in result && result.review_status === 'proposed' }
 
-export function AssistantPanel() {
-  const [collapsed, setCollapsed] = useState(false)
+export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [draft, setDraft] = useState('')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
@@ -35,6 +34,7 @@ export function AssistantPanel() {
   const [error, setError] = useState<string | null>(null)
   const [failureActions, setFailureActions] = useState<Action[]>([])
   const bodyRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const requestRef = useRef(false)
   const { navigate } = useRouter()
 
@@ -51,7 +51,15 @@ export function AssistantPanel() {
     finally { setLoadingHistory(false) }
   }, [])
   useEffect(() => { void loadConversations() }, [loadConversations])
-  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight }, [messages, sending, failureActions])
+  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight }, [messages, sending, failureActions, open])
+  useEffect(() => {
+    if (!open) return
+    const previousFocus = document.activeElement
+    inputRef.current?.focus()
+    const onKeyDown = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape' && !document.querySelector('dialog[open]')) onClose() }
+    window.addEventListener('keydown', onKeyDown)
+    return () => { window.removeEventListener('keydown', onKeyDown); if (previousFocus instanceof HTMLElement) previousFocus.focus() }
+  }, [open, onClose])
 
   function newConversation() {
     setConversationId(null); setMessages([]); setDraft(''); setError(null); setFailureActions([]); setHistoryError(null)
@@ -89,13 +97,11 @@ export function AssistantPanel() {
   }
   function openAction(action: Action) {
     const path = action.path ?? action.link
-    if (typeof path === 'string' && allowedLinks.has(path)) navigate(path)
+    if (typeof path === 'string' && allowedLinks.has(path)) { navigate(path); onClose() }
   }
 
-  if (collapsed) return <button type="button" className="assistant-panel__reopen" onClick={() => setCollapsed(false)} aria-label="Open assistant panel"><PanelRightOpen size={18} aria-hidden="true" /></button>
-
-  return <aside className="assistant-panel" aria-label="Assistant">
-    <div className="assistant-panel__header"><div className="assistant-panel__title"><Sparkles size={16} aria-hidden="true" /><span>Assistant</span></div><div className="assistant-panel__header-actions"><button type="button" className="assistant-panel__new" onClick={newConversation} aria-label="New conversation" title="New conversation"><Plus size={16} /></button><button type="button" className="icon-button" onClick={() => setCollapsed(true)} aria-label="Collapse assistant panel"><PanelRightClose size={16} aria-hidden="true" /></button></div></div>
+  return <aside className="assistant-panel" id="assistant-panel" aria-label="Assistant" hidden={!open}>
+    <div className="assistant-panel__header"><div className="assistant-panel__title"><Sparkles size={16} aria-hidden="true" /><span>Assistant</span></div><div className="assistant-panel__header-actions"><button type="button" className="icon-button" onClick={newConversation} aria-label="New conversation" title="New conversation"><Plus size={16} aria-hidden="true" /></button><button type="button" className="icon-button" onClick={onClose} aria-label="Collapse assistant panel" title="Close (Esc)"><X size={16} aria-hidden="true" /></button></div></div>
     <details className="assistant-panel__history"><summary><MessageSquare size={14} aria-hidden="true" /> Conversations{conversations.length ? ` (${conversations.length})` : ''}</summary><div className="assistant-panel__history-list">{historyError && <p className="assistant-panel__muted" role="alert">{historyError}</p>}{!historyError && conversations.length === 0 && <p className="assistant-panel__muted">No saved conversations yet.</p>}{conversations.map((item) => <button type="button" key={item.id} className={item.id === conversationId ? 'is-current' : ''} onClick={() => void loadConversation(item.id)}>{item.title || 'New conversation'}<time>{new Date(item.updated_at).toLocaleDateString()}</time></button>)}</div></details>
     <div className="assistant-panel__body" ref={bodyRef} aria-live="polite">
       {loadingHistory && <p className="assistant-panel__muted">Loading conversation…</p>}
@@ -106,7 +112,7 @@ export function AssistantPanel() {
       {error && <div className="assistant-panel__error" role="alert"><p>{error}</p><p>Completed actions are shown below when available. You can retry your message.</p></div>}
       {failureActions.map((action, index) => <ActionCard key={`failed-${index}`} action={action} onOpen={() => openAction(action)} />)}
     </div>
-    <form className="assistant-panel__composer" onSubmit={sendMessage}><label htmlFor="assistant-input" className="sr-only">Message the assistant</label><textarea id="assistant-input" rows={2} placeholder="Ask the assistant…" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown} maxLength={4000} disabled={sending} /><button type="submit" className="btn btn--primary" disabled={sending || !draft.trim()}><Send size={14} aria-hidden="true" />{sending ? 'Sending…' : 'Send'}</button><span className="assistant-panel__hint">Enter to send · Shift+Enter for a new line</span></form>
+    <form className="assistant-panel__composer" onSubmit={sendMessage}><label htmlFor="assistant-input" className="sr-only">Message the assistant</label><div className="assistant-panel__input"><textarea id="assistant-input" ref={inputRef} rows={2} placeholder="Ask the assistant…" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown} maxLength={4000} disabled={sending} /><button type="submit" className="assistant-panel__send" disabled={sending || !draft.trim()} aria-label={sending ? 'Sending…' : 'Send'} title="Send"><ArrowUp size={16} aria-hidden="true" /></button></div><span className="assistant-panel__hint">Enter to send · Shift+Enter for a new line</span></form>
   </aside>
 }
 

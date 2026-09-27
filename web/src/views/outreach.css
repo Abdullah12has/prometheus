@@ -22,12 +22,6 @@
 .gmail-setup ol { margin: 8px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--color-navy-muted); display: flex; flex-direction: column; gap: 4px; }
 .gmail-setup code { background: var(--color-navy-faint); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
 
-/* ---------- Tabs ---------- */
-
-.outreach-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border, var(--color-navy-border)); margin-bottom: 4px; overflow-x: auto; }
-.outreach-tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-navy-muted); padding: 10px 14px; cursor: pointer; white-space: nowrap; font-size: 13.5px; font-weight: 500; }
-.outreach-tabs button.is-active { color: var(--color-navy); border-bottom-color: var(--color-cobalt); }
-
 /* ---------- Two-pane layout (inbox) ---------- */
 
 .outreach-split { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
@@ -35,10 +29,10 @@
 /* ---------- Conversation list ---------- */
 
 .conversation-list { display: flex; flex-direction: column; gap: 0; max-height: 640px; overflow-y: auto; }
-.conversation-list__item { display: flex; flex-direction: column; gap: 3px; padding: 12px 4px; border: none; border-bottom: 1px solid var(--color-navy-faint); background: none; text-align: left; cursor: pointer; width: 100%; color: var(--color-navy); }
+.conversation-list__item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: none; border-radius: var(--radius-sm); background: none; text-align: left; cursor: pointer; width: 100%; color: var(--color-navy); font: inherit; transition: background var(--transition-fast); }
 .conversation-list__item:hover { background: var(--color-navy-faint); }
-.conversation-list__item.is-active { background: var(--color-cobalt-faint); }
-.conversation-list__item strong { font-size: 13px; }
+.conversation-list__item.is-active { background: var(--bg-active); }
+.conversation-list__item strong { font-size: 13.5px; font-weight: 500; }
 .conversation-list__item .muted { font-size: 12px; }
 
 /* ---------- Status / intent pills ---------- */
@@ -54,14 +48,14 @@
 /* ---------- Message thread ---------- */
 
 .thread { display: flex; flex-direction: column; gap: 10px; max-height: 640px; overflow-y: auto; padding-right: 4px; }
-.message-bubble { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); padding: 10px 14px; }
+.message-bubble { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); padding: 12px 14px; }
 .message-bubble--inbound { background: var(--color-surface); }
-.message-bubble--outbound { background: var(--color-navy-faint); }
+.message-bubble--outbound { background: var(--bg-subtle); border-color: var(--bg-subtle); }
 .message-bubble__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--color-navy-muted); }
 .message-bubble__body { margin-top: 6px; white-space: pre-wrap; font-size: 13.5px; line-height: 1.5; }
 .message-bubble__intent { margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
 .message-bubble__confirm { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
-.message-bubble__confirm select { border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); padding: 5px 8px; font-size: 12px; background: var(--color-workspace); }
+.message-bubble__confirm select { width: auto; min-height: 30px; padding: 4px 8px; font-size: 12.5px; }
 
 /* ---------- Draft cards ---------- */
 
@@ -72,8 +66,8 @@
 .draft-card__meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--color-navy-muted); }
 .draft-card__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.draft-preview { border: 1px dashed var(--color-navy-border); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--color-workspace); }
-.draft-preview__field { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--color-navy-muted); margin-bottom: 2px; }
+.draft-preview { border-radius: var(--radius-sm); padding: 14px 16px; background: var(--color-workspace); }
+.draft-preview__field { font-size: 12px; font-weight: 500; color: var(--color-navy-muted); margin-bottom: 2px; }
 .draft-preview__body { white-space: pre-wrap; font-size: 13.5px; line-height: 1.55; margin-bottom: 10px; }
 .draft-preview__hash { font-size: 11px; color: var(--color-navy-muted); word-break: break-all; }
 
@@ -86,9 +80,8 @@
 .step-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .step-card__head strong { font-size: 12.5px; }
 .step-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-.step-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--color-navy-muted); }
-.step-grid input, .step-grid select { border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); padding: 7px 10px; background: var(--color-surface); font-size: 13px; }
-.step-card textarea { width: 100%; border: 1px solid var(--color-navy-border); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--color-surface); font-size: 13px; min-height: 70px; }
+.step-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 500; color: var(--color-navy); }
+.step-card textarea { min-height: 70px; }
 
 /* ---------- Suppression / controls ---------- */
 
@@ -97,14 +90,14 @@
 .stop-banner--running { background: var(--color-teal-faint); border-color: var(--color-teal); }
 
 .suppression-table { width: 100%; border-collapse: collapse; }
-.suppression-table th { text-align: left; font-size: 11.5px; color: var(--color-navy-muted); padding: 8px 10px; border-bottom: 1px solid var(--color-navy-border); }
-.suppression-table td { padding: 9px 10px; border-bottom: 1px solid var(--color-navy-faint); font-size: 13px; vertical-align: top; }
+.suppression-table th, .enrollment-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--color-navy-muted); padding: 8px 12px; border-bottom: 1px solid var(--color-navy-border); white-space: nowrap; }
+.suppression-table td, .enrollment-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); font-size: 13.5px; vertical-align: top; }
+.suppression-table tr:last-child td, .enrollment-table tr:last-child td { border-bottom: none; }
 
 .enrollment-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-.enrollment-table th { text-align: left; font-size: 11.5px; color: var(--color-navy-muted); padding: 8px 10px; border-bottom: 1px solid var(--color-navy-border); }
-.enrollment-table td { padding: 9px 10px; border-bottom: 1px solid var(--color-navy-faint); font-size: 13px; }
 
 @media (max-width: 760px) {
   .outreach-split { grid-template-columns: 1fr; }
   .conversation-list, .thread { max-height: none; }
+  .suppression-table, .enrollment-table { display: block; overflow-x: auto; }
 }

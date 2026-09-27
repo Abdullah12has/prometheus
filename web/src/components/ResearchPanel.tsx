@@ -61,7 +61,7 @@ export function ResearchPanel({ companyId, onUpdated }: { companyId: string; onU
 
   const latest = runs[0]
   const canRetry = jobs.find((job) => job.kind === 'company.enrich' && ['failed', 'cancelled'].includes(job.state))
-  return <section className="research-panel" aria-labelledby="research-panel-title">
+  return <section className="panel research-panel" aria-labelledby="research-panel-title">
     <header className="research-panel__header"><div><h2 id="research-panel-title">Research coverage</h2><p>Shows what this run checked and what remains unknown.</p></div><button type="button" className="research-button research-button--primary" onClick={() => void queueResearch()} disabled={busy || active}>{active ? 'Research running…' : busy ? 'Starting…' : 'Refresh research'}</button></header>
     {error && <p className="research-error" role="alert">{error}</p>}
     {loading ? <p className="research-muted">Loading research…</p> : <>

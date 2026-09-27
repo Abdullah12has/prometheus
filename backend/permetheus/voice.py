@@ -150,14 +150,18 @@ class AgentPatch(BaseModel):
 class BrowserSessionIn(BaseModel):
     agent_id: uuid.UUID
     company_id: uuid.UUID | None = None
+    # Explicit, per-session choice by whoever starts this browser call (often the operator running
+    # their own test): true persists the transcript for review, false never writes one. The client
+    # must send its real, current value; it must never be defaulted to true to imply consent that
+    # was not actually given.
     recording_consent: bool
 
 
 def agent_out(agent: VoiceAgent) -> dict:
     if agent.voice_kind == VoiceKind.cloned:
-        voice = {"kind": "cloned", "label": "Authorized cloned voice", "authorization": agent.voice_authorization}
+        voice = {"kind": "cloned", "label": "Cloned voice", "authorization": agent.voice_authorization}
     else:
-        voice = {"kind": "default", "label": "Bundled default voice (not cloned)", "authorization": None}
+        voice = {"kind": "default", "label": "Default voice", "authorization": None}
     return {
         "id": str(agent.id), "name": agent.name, "introduction": agent.introduction,
         "instructions": agent.instructions, "language": agent.language,
@@ -321,23 +325,39 @@ def _wav(pcm: bytes, rate: int) -> bytes:
 
 
 @router.post("/agents/{agent_id}/voice-sample")
-async def upload_voice_sample(agent_id: uuid.UUID, request: Request, _: AuthSession = Depends(require_session),
+async def upload_voice_sample(agent_id: uuid.UUID, request: Request,
+                              session: AuthSession = Depends(require_session),
                               db: Session = Depends(get_db)):
-    """multipart: sample (file, <=10 MB, 3-30 s), voice_owner_name, owner_authorization=true,
-    authorization_basis=self|written_permission."""
+    """multipart: sample (file, <=10 MB, 3-30 s).
+
+    Current clients send `consent_action=create_own_voice`: the explicit act of recording or
+    uploading a sample and pressing save, paired with a short in-product notice, is the consent
+    record. The server never fabricates this by defaulting a checkbox; it only accepts an explicit
+    signal and stores who/when initiated it (see `initiated_by` below).
+
+    Older clients may instead send the previous authorization form fields, still accepted so
+    already-deployed clients keep working: `voice_owner_name` (1-200 chars), `owner_authorization`
+    (must be exactly "true") and `authorization_basis` (`self` or `written_permission`).
+    """
     agent = get_or_404(db, VoiceAgent, agent_id)
     runtime = _runtime(request)
     if runtime.asr_lock.locked():
         raise ApiError(409, "voice_busy", "A live conversation is using the speech runtime; try again after it ends")
     fields, files = _parse_multipart(request.headers.get("content-type", ""),
                                      await _read_body(request, MAX_UPLOAD + 64 * 1024))
-    owner = fields.get("voice_owner_name", "")
+    owner = fields.get("voice_owner_name", "").strip()
     basis = fields.get("authorization_basis")
-    if fields.get("owner_authorization") != "true" or not 1 <= len(owner) <= 200 \
-            or basis not in ("self", "written_permission"):
+    consent_action = fields.get("consent_action")
+    if consent_action == "create_own_voice":
+        # New contract: no checkbox value is invented; `basis` is informational only.
+        basis = "operator_provided"
+    elif fields.get("owner_authorization") == "true" and basis in ("self", "written_permission") \
+            and 1 <= len(owner) <= 200:
+        pass  # legacy authorization-form clients
+    else:
         raise ApiError(400, "authorization_required",
-                       "Cloning requires voice_owner_name, owner_authorization=true and "
-                       "authorization_basis of 'self' or 'written_permission'")
+                       "Cloning requires consent_action=create_own_voice, or the legacy "
+                       "voice_owner_name / owner_authorization=true / authorization_basis fields")
     sample = files.get("sample")
     if not sample:
         raise ApiError(400, "sample_required", "Attach the voice sample as the 'sample' file field")
@@ -358,9 +378,14 @@ async def upload_voice_sample(agent_id: uuid.UUID, request: Request, _: AuthSess
             agent.profile_path = str(target.relative_to(runtime.data_root))
             agent.voice_kind = VoiceKind.cloned
             agent.voice_authorization = {
-                "voice_owner_name": owner, "basis": basis, "authorized_at": utcnow().isoformat(),
+                "voice_owner_name": owner or None, "basis": basis, "authorized_at": utcnow().isoformat(),
                 "sample_seconds": round(len(pcm) / 2 / SAMPLE_RATE_CLONE, 2),
                 "sample_sha256": hashlib.sha256(sample).hexdigest(),
+                "consent_action": consent_action or "legacy_authorization_form",
+                # Initiation audit: who took the explicit action and when/from where, instead of a
+                # fabricated checkbox record.
+                "initiated_by": {"session_id": str(session.id),
+                                 "ip": request.client.host if request.client else None},
             }
             db.commit()
             if previous and previous != agent.profile_path:
