@@ -61,3 +61,15 @@ Voice creation: name → record or upload sample → preview sample → create a
 ## Acceptance
 
 All existing routes remain usable in the new style. Creating an agent with a valid sample ends with a persisted cloned voice and playable generated audio. Failures preserve recoverable input and explain the next action. Country imports store genuine source-backed records without cross-country identifier collisions or duplicate re-imports. Background enrichment creates evidence rather than invented financial or selling-interest claims. Final reporting distinguishes verified results, ongoing bulk work and unavailable data.
+
+## Verification — 27 September 2026
+
+- Implementation committed as `961020e`; the plan was committed before implementation.
+- `make check`: 240 backend tests passed, one conditional PostgreSQL concurrency test skipped because its disposable test database was not configured; production TypeScript/Vite build passed. Lint completed without errors (advisory React warnings remain).
+- Ten end-to-end browser tests passed against the running local app: intake/edit/owner conditions, matching and an unsent draft, country discovery/search/pagination, every route, browser note transcription, record → clone → generated preview → reload, invalid-sample retry, microphone cancellation, and live ASR → model → speech playback. Recorder-start failure was then added to the microphone cleanup check and passed.
+- All seven routes were checked at 1440px and 390px widths, with no horizontal page overflow. Agent creation was separately inspected at both widths. Screenshots remain in ignored local `data/screenshots/`.
+- The voice tests replace only the microphone device boundary with a speech recording. Local audio capture/encoding, upload validation, voice model, database profile persistence and generated audio run for real. This verifies the pipeline; physical microphone permissions and perceived voice similarity still depend on the operator's device and sample.
+- Live Swiss import pause/resume and application restart preserved the committed checkpoint; shutdown immediately requeued the process's import. A duplicate start returned the existing import. Regression tests also reject stale worker writes and preserve another worker's lease.
+- German CSV fields were compared with live API records, including records where validation authority differs from registration authority. Resumed PRH/GLEIF archives are hash-checked before reading checkpointed rows. The German API prefix was replayed against the CSV without duplicate companies.
+- Real country imports and enrichment run locally. See `DATA_SOURCES.md` for coverage and the Companies discovery panel for current counts. A completed research job represents bounded source attempts; missing financials and selling interest remain unknown.
+- Git-visible files were checked against locally configured secret values and source-repository names. Credentials, source archives, recordings and database contents remain ignored. No live outreach was sent during verification.
