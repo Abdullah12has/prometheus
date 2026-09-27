@@ -20,7 +20,7 @@ from enum import StrEnum
 from html import unescape
 from string import Formatter
 from typing import Any, Literal
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
@@ -341,6 +341,9 @@ def access_token(app: FastAPI, db: Session, account: GmailAccount) -> str:
 def connect(request: Request, response: Response, db: Session = Depends(get_db)):
     settings = request.app.state.settings
     cid, _, redirect = _oauth_config(settings)
+    origin = request.headers.get("origin")
+    if origin and urlsplit(origin).hostname != urlsplit(redirect).hostname:
+        raise ApiError(409, "oauth_host_mismatch", f"Open {_web_url(settings)} before connecting Gmail; the browser and OAuth callback must use the same hostname.")
     fernet = _fernet(settings)
     state, binding, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(32), secrets.token_urlsafe(64)
     db.execute(delete(OAuthState).where(OAuthState.expires_at <= utcnow()))

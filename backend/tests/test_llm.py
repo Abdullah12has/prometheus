@@ -43,3 +43,15 @@ def test_provider_error_does_not_expose_response_or_key(monkeypatch):
     with pytest.raises(ModelUnavailable) as error:
         asyncio.run(LanguageModel('https://model.example', 'test-secret', 'fast').complete([]))
     assert 'secret' not in str(error.value)
+
+
+def test_extraction_requests_complete_json_without_thinking(monkeypatch):
+    def respond(request):
+        body = json.loads(request.content)
+        assert body['response_format'] == {'type': 'json_object'}
+        assert body['reasoning_effort'] == 'none' and body['max_tokens'] == 6000
+        return httpx.Response(200, json={'choices': [{'message': {'content': '{"facts": [], "financials": []}'}}]})
+    client_type = httpx.AsyncClient
+    monkeypatch.setattr(httpx, 'AsyncClient', lambda **kwargs: client_type(transport=httpx.MockTransport(respond), **kwargs))
+    result = asyncio.run(LanguageModel('https://model.example', 'fixture', 'fast', 'none').extract('Source text', 'Extract sourced facts'))
+    assert result == {'facts': [], 'financials': []}

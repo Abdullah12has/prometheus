@@ -3,6 +3,7 @@ import { Plus, Search, Building2 } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
 import type { Company, CompanyListResponse } from '../lib/types'
 import { LoadingBlock, ErrorBlock, EmptyState } from '../components/StateViews'
+import { DiscoveryPanel } from '../components/DiscoveryPanel'
 import { CompanyIntakeDialog } from '../components/CompanyIntakeDialog'
 import { SellerIntentBadge } from '../components/SellerIntentBadge'
 import { Link, useRouter } from '../lib/router'
@@ -79,6 +80,8 @@ export function CompaniesView() {
           aria-label="Search companies"
         />
       </div>
+
+      <details className="panel"><summary>Discover companies from the Finnish register</summary><DiscoveryPanel /></details>
 
       {status === 'loading' && <LoadingBlock label="Loading companies…" />}
       {status === 'error' && (

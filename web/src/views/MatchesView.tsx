@@ -21,14 +21,15 @@ import {
   GitCompareArrows, Plus, Play, Pause, Upload, RefreshCw, ChevronDown, ChevronRight, ShieldCheck,
 } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
-import type { Company, CompanyListResponse } from '../lib/types'
+import type { Company, CompanyDetail, CompanyListResponse, Contact } from '../lib/types'
 import { LoadingBlock, ErrorBlock, EmptyState } from '../components/StateViews'
 import { useToast } from '../lib/toast'
+import { Link } from '../lib/router'
 import {
   BUYER_RESPONSE_LABELS, DISCLOSURE_FIELD_LABELS, MATCH_STATUS_LABELS, MILESTONE_LABELS,
   REASON_CATEGORY_LABELS, STRUCTURE_LABELS, formatDate, formatDateTime,
   type BuyerResponse, type DealAnalytics, type DealPage, type DisclosureField,
-  type Financing, type HistoricalDealIn, type HistoricalDealOut, type ImportResult, type MandateCriteria,
+  type DraftOut, type Financing, type HistoricalDealIn, type HistoricalDealOut, type ImportResult, type MandateCriteria,
   type MandateDetail, type MandateIn, type MandateOut, type MatchResultOut, type MatchRunDetail, type MatchRunOut,
   type Milestone, type OpportunityOut, type OutcomeOut, type ReasonBasis, type ReasonCategory,
   type ReplayResponse, type SourceIn, type SourceOut, type SpeakerAuthority, type Structure,
@@ -147,7 +148,7 @@ export function MatchesView() {
         ))}
       </nav>
 
-      {tab === 'mandates' && <MandatesTab />}
+      {tab === 'mandates' && <MandatesTab companies={companies} companiesStatus={companiesStatus} />}
       {tab === 'matches' && (
         <MatchesTab companies={companies} companiesStatus={companiesStatus} onRetryCompanies={loadCompanies} />
       )}
@@ -170,9 +171,11 @@ function emptyCriteria(): MandateCriteria {
   return {}
 }
 
-function MandateForm({ onSaved }: { onSaved: () => void }) {
+function MandateForm({ onSaved, companies, companiesStatus }: { onSaved: () => void; companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error' }) {
   const { push } = useToast()
   const [buyerName, setBuyerName] = useState('')
+  const [buyerCompanyId, setBuyerCompanyId] = useState('')
+  const [identityVerified, setIdentityVerified] = useState(false)
   const [contactName, setContactName] = useState('')
   const [advisor, setAdvisor] = useState('')
   const [evidenceLevel, setEvidenceLevel] = useState<'public_strategy' | 'buyer_confirmed'>('public_strategy')
@@ -224,6 +227,10 @@ function MandateForm({ onSaved }: { onSaved: () => void }) {
       setError('A public-strategy mandate needs a source (e.g. the page stating their acquisition strategy).')
       return
     }
+    if (identityVerified && (!buyerCompanyId || !wantMandateSource)) {
+      setError('Identity verification needs an existing buyer company and a source that supports its legal identity.')
+      return
+    }
     if (financingStatus === 'evidenced' && !wantFinancingSource) {
       setError('Evidenced financing needs a source.')
       return
@@ -234,6 +241,8 @@ function MandateForm({ onSaved }: { onSaved: () => void }) {
       const financing_source_id = await maybeCreateSource(wantFinancingSource, financingSourceKind, financingSourceUrl, financingSourceTitle)
       const body: MandateIn = {
         buyer_name: buyerName,
+        buyer_company_id: buyerCompanyId || undefined,
+        identity_verified: identityVerified,
         contact_name: contactName || undefined,
         advisor: advisor || undefined,
         criteria: {
@@ -253,7 +262,7 @@ function MandateForm({ onSaved }: { onSaved: () => void }) {
       push('Buyer mandate recorded', 'success')
       onSaved()
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : cause instanceof Error ? cause.message : 'Could not save this mandate.')
+      setError(explainApiError(cause, 'Could not save this mandate.'))
     } finally {
       setSaving(false)
     }
@@ -303,15 +312,29 @@ function MandateForm({ onSaved }: { onSaved: () => void }) {
             </label>
           </div>
         )}
-        {evidenceLevel === 'public_strategy' && (
+        {(evidenceLevel === 'public_strategy' || identityVerified) && (
           <SourcePicker
-            label="Source for this public strategy (required)"
+            label={identityVerified && evidenceLevel === 'public_strategy' ? 'Source for public strategy and buyer legal identity (required)' : identityVerified ? 'Source for buyer legal identity (required)' : 'Source for this public strategy (required)'}
             want={wantMandateSource} setWant={setWantMandateSource}
             kind={mandateSourceKind} setKind={setMandateSourceKind}
             url={mandateSourceUrl} setUrl={setMandateSourceUrl}
             title={mandateSourceTitle} setTitle={setMandateSourceTitle}
           />
         )}
+        <div className="condition-row__fields">
+          <label htmlFor="mandate-buyer-company">Existing buyer company (for verified buyer contacts)</label>
+          {companiesStatus === 'loading' ? <span className="muted small">Loading companies…</span> : companiesStatus === 'error' ? <span className="field-error">Could not load companies. Reload the page to choose a buyer company.</span> : (
+            <select id="mandate-buyer-company" value={buyerCompanyId} onChange={(e) => setBuyerCompanyId(e.target.value)}>
+              <option value="">No linked company</option>
+              {(companies ?? []).map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+            </select>
+          )}
+        </div>
+        <label className="checkbox-label identity-verify">
+          <input type="checkbox" checked={identityVerified} onChange={(e) => { setIdentityVerified(e.target.checked); if (e.target.checked) setWantMandateSource(true) }} />
+          I have checked the source and confirm this is the buyer’s legal identity
+        </label>
+        <p className="form-note">This confirmation is an explicit operator decision. A company name or public acquisition strategy alone does not verify legal identity.</p>
       </div>
 
       <div className="condition-row">
@@ -440,7 +463,7 @@ function MandateForm({ onSaved }: { onSaved: () => void }) {
   )
 }
 
-function MandatesTab() {
+function MandatesTab({ companies, companiesStatus }: { companies: Company[] | null; companiesStatus: 'loading' | 'ready' | 'error' }) {
   const [mandates, setMandates] = useState<MandateOut[] | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -479,7 +502,7 @@ function MandatesTab() {
 
       {showForm && (
         <div className="panel">
-          <MandateForm onSaved={() => { setShowForm(false); load() }} />
+          <MandateForm companies={companies} companiesStatus={companiesStatus} onSaved={() => { setShowForm(false); load() }} />
         </div>
       )}
 
@@ -809,12 +832,32 @@ function OutcomeForm({ opportunityId, onSaved }: { opportunityId: string; onSave
   )
 }
 
-function DraftForm({ opportunityId, onDrafted }: { opportunityId: string; onDrafted: (payload: Record<string, unknown>) => void }) {
+function explainApiError(cause: unknown, fallback: string): string {
+  if (!(cause instanceof ApiError)) return cause instanceof Error ? cause.message : fallback
+  const details = cause.detail
+  const reasons = details && typeof details === 'object' && 'reasons' in details && Array.isArray((details as { reasons?: unknown[] }).reasons)
+    ? (details as { reasons: unknown[] }).reasons.map(String)
+    : []
+  return [cause.message, ...reasons].join(' — ')
+}
+
+interface EmailDraftOut {
+  mail_draft_id: string
+  status: string
+  recipients: string[]
+  subject: string
+  body: string
+  disclosure: Record<string, unknown>
+}
+
+function DraftForm({ opportunityId, onDrafted }: { opportunityId: string; onDrafted: (proposal: DraftOut) => void }) {
   const { push } = useToast()
   const [authorizedBy, setAuthorizedBy] = useState('')
   const [authority, setAuthority] = useState<SpeakerAuthority>('owner')
   const [scope, setScope] = useState<Set<DisclosureField>>(new Set(['industry', 'country']))
   const [statement, setStatement] = useState('')
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [sourceTitle, setSourceTitle] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -827,19 +870,22 @@ function DraftForm({ opportunityId, onDrafted }: { opportunityId: string; onDraf
     setSaving(true)
     setError(null)
     try {
-      const draft = await api.post(`/api/opportunities/${opportunityId}/drafts`, {
+      if (!authorizedBy.trim() || !statement.trim()) throw new Error('Enter who authorized disclosure and their exact authorization statement.')
+      const source_id = await maybeCreateSource(true, 'owner_reported', sourceUrl, sourceTitle)
+      const draft = await api.post<DraftOut>(`/api/opportunities/${opportunityId}/drafts`, {
         authorization: {
           authorized_by: authorizedBy,
           authority,
           scope: Array.from(scope),
           statement,
           authorized_at: new Date().toISOString(),
+          source_id,
         },
       })
       push('Draft brief created (not sent)', 'success')
-      onDrafted((draft as { payload: Record<string, unknown> }).payload)
+      onDrafted(draft)
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Could not create this draft.')
+      setError(explainApiError(cause, 'Could not create this draft.'))
     } finally {
       setSaving(false)
     }
@@ -883,10 +929,98 @@ function DraftForm({ opportunityId, onDrafted }: { opportunityId: string; onDraf
       </div>
       <label htmlFor="auth-statement">Authorization statement (exact wording)</label>
       <textarea id="auth-statement" rows={2} required value={statement} onChange={(e) => setStatement(e.target.value)} />
+      <div className="field-row">
+        <div className="field-col"><label htmlFor="auth-source-url">Authorization source URL (optional)</label><input id="auth-source-url" type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://…" /></div>
+        <div className="field-col"><label htmlFor="auth-source-title">Authorization source description</label><input id="auth-source-title" required value={sourceTitle} onChange={(e) => setSourceTitle(e.target.value)} placeholder="Owner authorization recorded in a call" /></div>
+      </div>
+      <p className="form-note">This source records the authorization basis. The source entry does not itself prove consent; use only the exact permission you received.</p>
       <div className="dialog__actions">
         <button type="submit" className="btn btn--primary" disabled={saving}>{saving ? 'Creating…' : 'Create draft brief'}</button>
       </div>
     </form>
+  )
+}
+
+function EmailDraftForm({ opportunityId, proposal, mandateId }: { opportunityId: string; proposal: DraftOut; mandateId: string }) {
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [selectedContact, setSelectedContact] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [mailDraft, setMailDraft] = useState<EmailDraftOut | null>(null)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    api.get<MandateDetail>(`/api/mandates/${mandateId}`)
+      .then((mandate) => {
+        if (!mandate.buyer_company_id) throw new Error('Link this mandate to an existing buyer company before choosing a recipient.')
+        return api.get<CompanyDetail>(`/api/companies/${mandate.buyer_company_id}`)
+      })
+      .then((company) => {
+        if (!active) return
+        const eligible = company.contacts.filter((contact) => contact.contact_role === 'buyer' && contact.verification === 'verified' && Boolean(contact.email))
+        setContacts(eligible)
+        setSelectedContact(eligible[0]?.id ?? '')
+      })
+      .catch((cause) => { if (active) setError(explainApiError(cause, 'Could not load verified buyer contacts.')) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [mandateId])
+
+  async function createEmailDraft(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedContact) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await api.post<EmailDraftOut>(`/api/opportunities/${opportunityId}/email-draft`, {
+        proposal_id: proposal.id,
+        contact_id: selectedContact,
+      })
+      setMailDraft(result)
+    } catch (cause) {
+      setError(explainApiError(cause, 'Could not create the email draft.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="proposal-review">
+      <h4>Authorized proposal</h4>
+      <p className="form-note">Proposal saved as a draft. It contains only accepted facts in the scope authorized above.</p>
+      <dl className="proposal-review__facts">
+        {Object.entries((proposal.payload.company ?? {}) as Record<string, unknown>).map(([key, value]) => (
+          <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</dd></div>
+        ))}
+      </dl>
+      <p className="form-note">{String(proposal.payload.disclaimer ?? '')}</p>
+      {!mailDraft ? (
+        <form className="stack-form" onSubmit={createEmailDraft}>
+          <h4>Create an unapproved email draft</h4>
+          {loading && <p className="muted small">Loading buyer contacts…</p>}
+          {error && <p className="field-error" role="alert">{error}</p>}
+          {!loading && !error && contacts.length === 0 && <p className="form-note">No verified buyer contact with an email is available for this mandate.</p>}
+          {!loading && contacts.length > 0 && <label className="field-col">Verified buyer contact
+            <select value={selectedContact} onChange={(e) => setSelectedContact(e.target.value)}>
+              {contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name} · {contact.email}</option>)}
+            </select>
+          </label>}
+          <p className="form-note">Creating a draft does not approve or send it. Review is still required in Outreach.</p>
+          <div className="dialog__actions"><button className="btn btn--primary" type="submit" disabled={saving || loading || !selectedContact}>{saving ? 'Creating…' : 'Create email draft'}</button></div>
+        </form>
+      ) : (
+        <section className="mail-draft-preview" aria-label="Unapproved email draft">
+          <h4>Email draft · awaiting review</h4>
+          <p><strong>To:</strong> {mailDraft.recipients.join(', ')}</p>
+          <p><strong>Subject:</strong> {mailDraft.subject}</p>
+          <pre>{mailDraft.body}</pre>
+          <p className="form-note">Unapproved draft. Nothing has been sent.</p>
+          <Link to="/outreach" className="btn btn--secondary">Open in Outreach</Link>
+        </section>
+      )}
+    </div>
   )
 }
 
@@ -899,7 +1033,7 @@ function OpportunitiesTab({ companies, companiesStatus }: { companies: Company[]
   const [outcomes, setOutcomes] = useState<OutcomeOut[] | null>(null)
   const [showOutcomeForm, setShowOutcomeForm] = useState(false)
   const [showDraftForm, setShowDraftForm] = useState(false)
-  const [draftPayload, setDraftPayload] = useState<Record<string, unknown> | null>(null)
+  const [proposal, setProposal] = useState<DraftOut | null>(null)
 
   function load() {
     setStatus('loading')
@@ -951,7 +1085,7 @@ function OpportunitiesTab({ companies, companiesStatus }: { companies: Company[]
               </div>
               <div className="dialog__actions" style={{ justifyContent: 'flex-start' }}>
                 <button type="button" className="btn btn--secondary" onClick={() => {
-                  setSelected(o.id); loadOutcomes(o.id); setShowOutcomeForm(false); setShowDraftForm(false); setDraftPayload(null)
+                  setSelected(o.id); loadOutcomes(o.id); setShowOutcomeForm(false); setShowDraftForm(false); setProposal(null)
                 }}>
                   {selected === o.id ? 'Hide' : 'Outcomes & drafts'}
                 </button>
@@ -973,12 +1107,8 @@ function OpportunitiesTab({ companies, companiesStatus }: { companies: Company[]
                     </button>
                   </div>
                   {showOutcomeForm && <OutcomeForm opportunityId={o.id} onSaved={() => { setShowOutcomeForm(false); loadOutcomes(o.id); load() }} />}
-                  {showDraftForm && <DraftForm opportunityId={o.id} onDrafted={(p) => { setDraftPayload(p); setShowDraftForm(false) }} />}
-                  {draftPayload && (
-                    <div className="form-note">
-                      <strong>Draft created (not sent).</strong> Disclaimer: {String(draftPayload.disclaimer ?? '')}
-                    </div>
-                  )}
+                  {showDraftForm && <DraftForm opportunityId={o.id} onDrafted={(created) => { setProposal(created); setShowDraftForm(false) }} />}
+                  {proposal && selected === o.id && <EmailDraftForm key={proposal.id} opportunityId={o.id} mandateId={o.mandate_id} proposal={proposal} />}
                   {outcomes && outcomes.length > 0 && (
                     <div className="check-list">
                       {outcomes.map((e) => (
@@ -1095,11 +1225,11 @@ function GraphTab({ companies, companiesStatus }: { companies: Company[] | null;
               </button>
             )}
           </div>
-          <svg viewBox="0 0 520 440" width="100%" height="360" role="img" aria-label={`Match graph for ${companyName}`}>
+          <svg viewBox="0 0 520 440" width="100%" height="360" role="group" aria-label={`Match graph for ${companyName}`}>
             {nodes.map(({ res, x, y }) => (
               <line
                 key={res.mandate_id}
-                className={`deals-graph__edge ${selectedEdge && selectedEdge !== res.mandate_id ? 'deals-graph__edge--dim' : ''}`}
+                className={`deals-graph__edge ${playing && selectedEdge === res.mandate_id ? 'deals-graph__edge--playing' : ''} ${selectedEdge && selectedEdge !== res.mandate_id ? 'deals-graph__edge--dim' : ''}`}
                 x1={cx} y1={cy} x2={x} y2={y}
                 stroke={colorFor[res.status]}
                 strokeWidth={selectedEdge === res.mandate_id ? 3 : 1.5}
@@ -1111,6 +1241,8 @@ function GraphTab({ companies, companiesStatus }: { companies: Company[] | null;
               <g
                 key={res.mandate_id}
                 style={{ cursor: 'pointer' }}
+                role="button" tabIndex={0} aria-label={`Inspect match with ${nameFor(res.mandate_id)}`}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setPlaying(false); setSelectedEdge(res.mandate_id) } }}
                 onClick={() => { setPlaying(false); setSelectedEdge(res.mandate_id) }}
               >
                 <circle cx={x} cy={y} r={18} fill={colorFor[res.status]} opacity={0.85} />

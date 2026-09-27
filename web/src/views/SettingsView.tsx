@@ -4,6 +4,7 @@ import { api, ApiError } from '../lib/api'
 import type { Connector, SettingsStatus } from '../lib/types'
 import { LoadingBlock, ErrorBlock } from '../components/StateViews'
 import { useAuth } from '../lib/auth'
+import { Link } from '../lib/router'
 
 function StatusRow({ connector }: { connector: Connector }) {
   const Icon = connector.configured ? CheckCircle2 : HelpCircle
@@ -17,7 +18,7 @@ function StatusRow({ connector }: { connector: Connector }) {
           {' · '}
           {connector.implemented ? 'Available' : 'Not implemented'}
         </div>
-        <div className="muted small">{connector.note}</div>
+        <div className="muted small">{connector.note}</div>{connector.id === 'gmail' && <Link to="/outreach">Manage Gmail connection</Link>}
       </div>
     </li>
   )
@@ -61,7 +62,7 @@ export function SettingsView() {
           <div className="panel__row">
             <h2>Connectors</h2>
           </div>
-          <p className="muted small">Status is read-only here. Configure missing environment values in the backend deployment.</p>
+          <p className="muted small">Status is read-only here. Configure missing values in the local .env file and restart the application.</p>
           {data.connectors.length > 0 ? (
             <ul className="status-list">
               {data.connectors.map((connector) => (

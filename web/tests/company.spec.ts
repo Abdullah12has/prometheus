@@ -25,6 +25,9 @@ test('real login, company intake, edit, attributed intent and refresh', async ({
     await page.getByRole('dialog').getByRole('button', { name: 'Add company', exact: true }).click()
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     companyId = new URL(page.url()).pathname.split('/').pop()
+    const sessionToken = (await (await page.request.get('/api/auth/me')).json()).csrf_token
+    const jobs = await (await page.request.get(`/api/jobs?company_id=${companyId}`)).json()
+    for (const job of jobs.filter((j: { state: string }) => ['queued', 'running'].includes(j.state))) await page.request.post(`/api/jobs/${job.id}/cancel`, { headers: { 'X-CSRF-Token': sessionToken } })
     await page.getByRole('button', { name: 'Edit', exact: true }).click()
     await page.getByLabel('Description', { exact: true }).fill('Temporary browser verification; deleted after the test.')
     await page.getByRole('button', { name: 'Save changes', exact: true }).click()

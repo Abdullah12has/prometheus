@@ -1,7 +1,6 @@
 .PHONY: setup dev check doctor services stop
 setup:
-	uv sync --python 3.12
-	cd web && npm install
+	python3 scripts/setup.py
 services:
 	docker compose up -d --wait db search
 dev: services

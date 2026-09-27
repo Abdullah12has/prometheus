@@ -30,4 +30,18 @@
 .voice-button { border: 1px solid var(--color-navy-border); border-radius: 7px; padding: 8px 12px; background: var(--color-surface); color: inherit; cursor: pointer; font: inherit; }
 .voice-button:disabled { cursor: not-allowed; opacity: .55; }
 .voice-button--primary { background: var(--color-cobalt); border-color: var(--color-cobalt); color: #fff; }
+.voice-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--color-navy-border); margin: 0 0 16px; }
+.voice-tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 10px 14px; color: var(--color-navy-muted); cursor: pointer; font: inherit; font-weight: 600; }
+.voice-tabs button.is-active { color: var(--color-cobalt); border-bottom-color: var(--color-cobalt); }
+.voice-tabs button:focus-visible, .voice-panel__history-item:focus-visible { outline: 2px solid var(--color-cobalt); outline-offset: 2px; }
+.voice-panel__history { border-top: 1px solid var(--color-navy-border); padding-top: 14px; }
+.voice-panel__history > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.voice-panel__history h3 { margin: 0; font-size: 16px; }
+.voice-panel__history ul { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.voice-panel__history li { border: 1px solid var(--color-navy-border); border-radius: 8px; overflow: hidden; }
+.voice-panel__history-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; border: 0; background: transparent; color: inherit; text-align: left; padding: 12px; cursor: pointer; font: inherit; }
+.voice-panel__history-item span:first-child { display: grid; gap: 3px; }
+.voice-panel__history-item small { color: var(--color-navy-muted); }
+.voice-panel__history-detail { border-top: 1px solid var(--color-navy-border); padding: 12px; overflow-wrap: anywhere; }
+.voice-panel__history-detail p { margin: 0 0 8px; line-height: 1.45; }
 @media (max-width: 600px) { .voice-panel { padding: 14px; } .voice-panel__voice audio { width: 100%; } }

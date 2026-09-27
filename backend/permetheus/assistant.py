@@ -22,6 +22,12 @@ router = APIRouter(prefix="/api/assistant", tags=["assistant"], dependencies=[De
 
 # Only explicitly reversible, operator-directed routes can become model tools.
 ALLOWED = {
+    ("POST", "/api/companies/{company_id}/enrichments"),
+    ("GET", "/api/companies/{company_id}/coverage"),
+    ("GET", "/api/research/runs"), ("POST", "/api/discovery/runs"),
+    ("GET", "/api/discovery/runs"), ("GET", "/api/discovery/runs/{run_id}"),
+    ("POST", "/api/jobs/{job_id}/retry"), ("POST", "/api/jobs/{job_id}/cancel"),
+    ("GET", "/api/companies/{company_id}/documents"), ("GET", "/api/documents/{document_id}"),
     ("GET", "/api/companies"), ("POST", "/api/companies"),
     ("GET", "/api/companies/{company_id}"), ("PATCH", "/api/companies/{company_id}"),
     ("POST", "/api/companies/{company_id}/contacts"),
@@ -231,7 +237,7 @@ def _guard_write(template: str, method: str, body: Any, path_params: dict | None
 
 def _ui_link(path: str) -> str:
     if path.startswith("/api/notes"):
-        return "/voice-notes"
+        return "/voice-notes?tab=notes"
     if path.startswith("/api/match-runs"):
         return "/matches"
     if path.startswith("/api/opportunities"):

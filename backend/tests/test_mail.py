@@ -819,3 +819,8 @@ def test_postgres_concurrent_run_due_claims_once():
             assert sorted(r["result"] for r in results) == ["sent", "skipped"] and sends(env) == 2
         finally:
             Base.metadata.drop_all(env.db.kw["bind"])
+
+
+def test_oauth_rejects_cross_hostname_cookie_binding(env):
+    r = env.c.post("/api/gmail/connect", headers={"Origin": "http://127.0.0.1:4310"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "oauth_host_mismatch"

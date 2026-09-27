@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api'
+import type { Company, CompanyListResponse } from '../lib/types'
 import { VoiceAudio, type VoiceAudioEvent } from '../lib/voice-audio'
 import './voice.css'
 
 type Agent = { id: string; name: string; introduction: string; instructions: string; max_duration_seconds: number; voice: { kind: string; label: string; authorization: { voice_owner_name: string; basis: string } | null } }
 type Capabilities = { browser: { available: boolean; label: string; speech_runtime: boolean; language_model: boolean }; phone: { available: false; label: string; reason: string } }
 type TranscriptLine = { role: 'user' | 'agent'; text: string }
+type SavedSession = { id: string; agent_id: string; company_id: string | null; status: string; created_at: string; ended_at: string | null; end_reason: string | null; transcript?: TranscriptLine[]; proposed_outcome?: { summary?: string; stated_interest?: string; follow_ups?: string[]; note?: string } | null }
 type ServerEvent = { type: string; session_id?: string; websocket_path?: string; channel_label?: string; utterance_id?: string; seq?: number; sample_rate?: number; pcm?: string; text?: string; committed?: string; tentative?: string; turn_id?: string | null; reason?: string; message?: string; fatal?: boolean }
 const voiceError = (cause: unknown) => cause instanceof ApiError ? `${cause.message}${cause.detail ? ` (${JSON.stringify(cause.detail)})` : ''}` : cause instanceof Error ? cause.message : 'The request could not be completed.'
 
 export function VoicePanel() {
   const [agents, setAgents] = useState<Agent[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [companyId, setCompanyId] = useState('')
+  const [sessions, setSessions] = useState<SavedSession[]>([])
+  const [expandedSession, setExpandedSession] = useState<SavedSession | null>(null)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [selected, setSelected] = useState('')
   const [editing, setEditing] = useState(false)
@@ -42,6 +48,11 @@ export function VoicePanel() {
     try {
       const [caps, data] = await Promise.all([api.get<Capabilities>('/api/voice/capabilities'), api.get<Agent[]>('/api/voice/agents')])
       setCapabilities(caps); setAgents(data); setSelected((current) => current || data[0]?.id || '')
+      const [companyResult, historyResult] = await Promise.allSettled([
+        api.get<CompanyListResponse | Company[]>('/api/companies'), api.get<SavedSession[]>('/api/voice/sessions'),
+      ])
+      if (companyResult.status === 'fulfilled') setCompanies(Array.isArray(companyResult.value) ? companyResult.value : companyResult.value.items)
+      if (historyResult.status === 'fulfilled') setSessions(historyResult.value)
     } catch (cause) { setError(voiceError(cause)) }
   }, [])
   useEffect(() => { void refresh() }, [refresh])
@@ -136,7 +147,7 @@ export function VoicePanel() {
       const audio = new VoiceAudio()
       audioRef.current = audio
       await audio.unlock()
-      const ticket = await api.post<{ session_id: string; ticket: string; websocket_path: string }>('/api/voice/browser-sessions', { agent_id: agent.id, recording_consent: true })
+      const ticket = await api.post<{ session_id: string; ticket: string; websocket_path: string }>('/api/voice/browser-sessions', { agent_id: agent.id, company_id: companyId || null, recording_consent: true })
       const wsUrl = new URL(ticket.websocket_path, window.location.href)
       wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
       const socket = new WebSocket(wsUrl)
@@ -169,7 +180,7 @@ export function VoicePanel() {
       socket.onclose = (event) => {
         void audio.stop()
         if (audioRef.current === audio) audioRef.current = null
-        if (!disposedRef.current) { setCallState('idle'); if (event.code !== 1000 && event.code !== 1005) setError((current) => current ?? `Conversation disconnected (${event.code}).`) }
+        if (!disposedRef.current) { setCallState('idle'); if (event.code !== 1000 && event.code !== 1005) setError((current) => current ?? `Conversation disconnected (${event.code}).`); void api.get<SavedSession[]>('/api/voice/sessions').then(setSessions).catch(() => {}) }
       }
     } catch (cause) { setError(voiceError(cause)); await stopCall(false) }
   }
@@ -182,9 +193,19 @@ export function VoicePanel() {
       <div className="voice-panel__agent-row"><label htmlFor="voice-agent">Conversation agent</label><select id="voice-agent" value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">Choose an agent</option>{agents.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button className="voice-button" type="button" onClick={() => beginEdit()}>Create agent</button>{agent && <button className="voice-button" type="button" onClick={() => beginEdit(agent)}>Edit</button>}</div>
       {agent && <><div className="voice-panel__voice"><div><strong>{agent.voice.label}</strong>{agent.voice.authorization && <p>Authorized for {agent.voice.authorization.voice_owner_name} · {agent.voice.authorization.basis.replace('_', ' ')}</p>}</div>{agent.voice.kind === 'cloned' && <button className="voice-button" type="button" onClick={() => void switchDefault()} disabled={busy}>Use bundled voice</button>}<audio controls preload="none" src={`/api/voice/agents/${agent.id}/preview`} aria-label="Preview agent introduction" /></div>
         <details className="voice-panel__details"><summary>Voice sample and owner authorization</summary><form onSubmit={uploadSample}><label>Record a 3–30 second voice sample</label><div className="voice-panel__actions"><button type="button" className="voice-button" disabled={recording || busy} onClick={() => void startSampleRecording()}>{recording ? 'Recording…' : 'Start recording'}</button><button type="button" className="voice-button" disabled={!recording} onClick={() => mediaRecorderRef.current?.stop()}>Stop recording</button></div><label>Or choose an audio file<input type="file" accept="audio/*" onChange={(e) => { const file = e.target.files?.[0] ?? null; setSample(file); setSampleSeconds(0) }} /></label>{sample && <p className="voice-panel__hint">Selected: {sample.name} {sampleSeconds > 0 ? `· ${sampleSeconds.toFixed(1)} seconds` : '· Duration checked during upload'}</p>}<label>Voice owner name<input value={owner} onChange={(e) => setOwner(e.target.value)} required maxLength={200} /></label><label>Authorization basis<select value={basis} onChange={(e) => setBasis(e.target.value as 'self' | 'written_permission')}><option value="self">I am the voice owner</option><option value="written_permission">Written permission from the voice owner</option></select></label><label className="voice-panel__check"><input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} required /> I confirm the voice owner authorized this sample to create a voice clone.</label><button className="voice-button voice-button--primary" disabled={busy || !sample || !authorized}>{busy ? 'Uploading…' : 'Create authorized voice'}</button></form></details>
-        <div className="voice-panel__start"><label className="voice-panel__check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> The participant has agreed to this browser conversation and transcript recording.</label><button className="voice-button voice-button--primary" type="button" disabled={!consent || !capabilities?.browser.available || callState !== 'idle'} onClick={() => void startCall()}>{callState === 'connecting' ? 'Connecting…' : 'Start browser conversation'}</button>{callState !== 'idle' && <button className="voice-button" type="button" onClick={() => void stopCall()}>End conversation</button>}</div>
+        <div className="voice-panel__start"><label>Associate with a company (optional)<select value={companyId} onChange={(e) => setCompanyId(e.target.value)}><option value="">No company</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name || 'Unnamed company'}</option>)}</select></label><label className="voice-panel__check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> The participant has agreed to this browser conversation and transcript recording.</label><button className="voice-button voice-button--primary" type="button" disabled={!consent || !capabilities?.browser.available || callState !== 'idle'} onClick={() => void startCall()}>{callState === 'connecting' ? 'Connecting…' : 'Start browser conversation'}</button>{callState !== 'idle' && <button className="voice-button" type="button" onClick={() => void stopCall()}>End conversation</button>}</div>
       </>}
     </>}
     {(transcript.length > 0 || partial.committed || partial.tentative) && <div className="voice-panel__transcript" aria-live="polite" aria-label="Conversation captions">{transcript.map((line, index) => <p key={`${index}-${line.role}`} className={`voice-panel__line is-${line.role}`}><strong>{line.role === 'user' ? 'You' : agent?.name ?? 'AI'}:</strong> {line.text}</p>)}{(partial.committed || partial.tentative) && <p className="voice-panel__line is-user"><strong>You:</strong> {partial.committed}<span className="voice-panel__tentative">{partial.tentative}</span></p>}</div>}
+    <section className="voice-panel__history" aria-labelledby="voice-history-title"><header><h3 id="voice-history-title">Previous conversations</h3><button type="button" className="voice-button" onClick={() => void api.get<SavedSession[]>('/api/voice/sessions').then(setSessions).catch((cause) => setError(voiceError(cause)))}>Refresh</button></header>{sessions.length === 0 ? <p className="voice-panel__hint">Saved conversations will appear here.</p> : <ul>{sessions.map((session) => {
+      const savedAgent = agents.find((item) => item.id === session.agent_id)
+      const company = companies.find((item) => item.id === session.company_id)
+      const expanded = expandedSession?.id === session.id
+      return <li key={session.id}><button type="button" className="voice-panel__history-item" aria-expanded={expanded} onClick={async () => {
+        if (expanded) { setExpandedSession(null); return }
+        try { setExpandedSession(await api.get<SavedSession>(`/api/voice/sessions/${session.id}`)) }
+        catch (cause) { setError(voiceError(cause)) }
+      }}><span><strong>{company?.name ?? savedAgent?.name ?? 'Conversation'}</strong><small>{new Date(session.created_at).toLocaleString()} · {session.status}{session.end_reason ? ` · ${session.end_reason.replaceAll('_', ' ')}` : ''}</small></span><span>{expanded ? 'Hide' : 'View'}</span></button>{expanded && expandedSession && <div className="voice-panel__history-detail">{expandedSession.proposed_outcome && <><p><strong>Proposed summary:</strong> {expandedSession.proposed_outcome.summary || 'No summary available.'}</p><p><strong>Stated interest (proposed):</strong> {expandedSession.proposed_outcome.stated_interest || 'unknown'}</p>{expandedSession.proposed_outcome.follow_ups?.length ? <p><strong>Possible follow-ups:</strong> {expandedSession.proposed_outcome.follow_ups.join(' · ')}</p> : null}<p className="voice-panel__hint">{expandedSession.proposed_outcome.note}</p></>}{expandedSession.transcript?.length ? expandedSession.transcript.map((line, index) => <p key={`${index}-${line.role}`}><strong>{line.role === 'user' ? 'Participant' : savedAgent?.name ?? 'Agent'}:</strong> {line.text}</p>) : <p className="voice-panel__hint">No transcript was saved for this conversation.</p>}</div>}</li>
+    })}</ul>}</section>
   </section>
 }

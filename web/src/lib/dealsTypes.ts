@@ -406,7 +406,6 @@ export interface DraftOut {
   payload: Record<string, unknown>
   content_hash: string
   status: string
-  dispatch: string
   created_at: string
 }
 

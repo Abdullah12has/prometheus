@@ -22,6 +22,13 @@
 .research-coverage ul { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .research-coverage > p { color: var(--color-navy-muted); font-size: 12px; }
 .research-coverage.is-error li { color: var(--color-red); }
+.research-coverage--required ul { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+.research-coverage--required li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 9px; border-radius: var(--radius-sm); background: var(--color-workspace); color: var(--color-navy); }
+.coverage-status { flex: 0 0 auto; padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+.coverage-status--accepted, .coverage-status--confirmed { background: var(--color-teal-faint); color: var(--color-teal); }
+.coverage-status--proposed_unreviewed, .coverage-status--missing { background: var(--color-amber-faint); color: var(--color-amber); }
+.coverage-status--unconfirmed { background: var(--color-navy-faint); color: var(--color-navy-muted); }
+.research-coverage--required > p { margin-bottom: 0; font-size: 11px; line-height: 1.5; }
 .discovery-panel { gap: 16px; }
 .discovery-form, .discovery-schedule form { display: grid; gap: 11px; }
 .discovery-form { border: 1px solid var(--color-navy-border); border-radius: var(--radius-md); padding: 13px; }

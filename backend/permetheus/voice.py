@@ -207,7 +207,8 @@ async def _speech_maintenance(runtime):
 @router.get("/capabilities")
 def capabilities(request: Request, _: AuthSession = Depends(require_session)):
     llm = getattr(request.app.state, "llm", None)
-    speech = getattr(request.app.state, "speech", None) is not None
+    runtime = getattr(request.app.state, "speech", None)
+    speech = runtime is not None and all(path.is_file() for name in ("asr_binary", "asr_model", "tts_python", "tts_script") if (path := getattr(runtime, name, None)) is not None)
     return {
         "browser": {"available": speech and bool(llm and llm.configured), "label": BROWSER_LABEL,
                     "speech_runtime": speech, "language_model": bool(llm and llm.configured)},
